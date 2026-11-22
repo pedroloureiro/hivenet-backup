@@ -19,11 +19,11 @@ Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
 2. Files are processed one at a time, in order. For each file:
    1. Mark it **Copying**.
    2. If the reported size is known and larger than the free space in the **Backup store** minus a 50 MB margin, it is **Failed: Not enough space** without writing anything.
-   3. Stream the source into a temporary file inside the **Batch**'s folder, computing SHA-256 of the bytes as they are read.
+   3. Stream the source into a temporary file inside the file's own folder (section 4), computing SHA-256 of the bytes as they are read.
    4. If the reported size is known and the byte count differs, it is **Failed: Copy didn't match source**.
    5. `fsync` the temporary file, read it back and hash it again. A different hash is **Failed: Copy didn't match source**.
    6. Rename the temporary file to its final name. Only now is the file **Backed up**, recorded with its **Fingerprint** and stored size.
-   7. On any failure the temporary file is deleted, the **Failure reason** recorded, and the next file starts.
+   7. On any failure the file's folder, which holds only its temporary file, is deleted, the **Failure reason** recorded, and the next file starts.
 3. Every file ends with exactly one final **Outcome**. Only cancellation of the scope (process death) stops the loop.
 
 ### 3. Failure reasons
@@ -39,6 +39,8 @@ Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
 ### 4. Backup store layout
 
 `filesDir/backups/<batchId>/<fileId>/<sanitised display name>` (ADR-0001). The per-file folder makes same-named **Source files** impossible to collide; the display name is kept so an opened or uploaded copy has a meaningful name. Temporary files end in `.part` and never sit under the final name.
+
+Sanitising replaces `/` and NUL with `_` and turns an empty name, `.` or `..` into `_`. A name longer than 250 UTF-8 bytes (255, the file-system limit, less `.part`) is cut to fit at a character boundary, keeping an extension of up to 32 bytes.
 
 ### 5. Reopening the app
 
@@ -62,8 +64,10 @@ domain/
   BackupCopyFailedException
 data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
+  mappers/        BackupCopyNameMapper, BackupStoreFailureMapper
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
+extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
 ```
 
 | Repository | Wraps | Owns |
@@ -80,7 +84,7 @@ di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 
 Room holds the record of what happened to each **Source file**; the **Backup store** holds only the bytes, and a **Backed up** row points to its copy with `relativePath`. Rows of older **Batches** are kept: they hold the **Fingerprints** of copies still in the **Backup store**. One table, one row per **Batch file**:
 
-- `batch_file_records`: `id`, `batchId` (the manager assigns the highest existing one + 1), `batchCreatedAtEpochMs`, `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?`, `relativePath?`.
+- `batch_file_records`: `id`, `batchId` (the manager assigns the highest existing one + 1), `batchCreatedAtEpochMs`, `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?` (lowercase hex SHA-256), `relativePath?`.
 - Schema version 1, exported to `app/schemas/`.
 
 ## Testing
@@ -90,7 +94,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | Class | Kind | Proves |
 |---|---|---|
 | `RunBatch` | JVM, fakes | Order; isolation; each **Failure reason** from its real cause; space check fails only the file that doesn't fit; exactly one **Outcome** per file |
-| `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy; correct **Fingerprint**; no file left after a read error or mismatch; same names don't collide; delete scope |
+| `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM |
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
 | `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
