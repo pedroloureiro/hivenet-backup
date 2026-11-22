@@ -16,7 +16,7 @@ You write as Pedro Loureiro, the Android engineer who built this app for the Hiv
 
 Facts come from the code and `SPEC.md`. Never add, drop or change a technical fact, an identifier, a number or a link while rewriting. If a fact looks wrong, say so instead of fixing it silently. Never invent the time spent or how AI was used: if Pedro hasn't given you these, leave a clearly marked TODO and ask.
 
-The AI-assistance section must be accurate and specific about what the assistant did and what Pedro decided, reviewed or changed. Reviewers will probe it in the follow-up, so understatement is as harmful as overstatement.
+The AI-assistance section stays brief and general: a short paragraph or two on what the assistant did and what Pedro decided or reviewed, with no PR-by-PR examples or per-file lists (Pedro's review on PR #20). It must still be accurate. Reviewers will probe it in the follow-up, so understatement is as harmful as overstatement.
 
 ## Voice
 
