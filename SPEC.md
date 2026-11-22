@@ -14,7 +14,7 @@ What the app does and how it is built. Terms in **bold** are defined in [CONTEXT
 
 ### 2. Running a Batch
 
-Tapping **Back up N files** clears the selection and starts a **Batch** with it; a tap with an empty selection, such as a second tap before the screen updates, does nothing. `BackupViewModel` launches `RunBatch` in the app-wide scope (ADR-0002), which runs it as follows:
+Tapping **Back up N files** clears the selection and starts a **Batch** with it; a tap with an empty selection, such as a second tap before the screen updates, does nothing. `BackupViewModel` launches `RunBatch` in the app-wide scope (ADR-0002), once settling (section 5) has finished, and `RunBatch` runs it as follows:
 
 1. One row per **Source file** is recorded in one transaction under a new **Batch** id, every file **Waiting**, in picked order.
 2. Files are processed one at a time, in order. For each file:
@@ -45,18 +45,19 @@ Sanitising replaces `/` and NUL with `_` and turns an empty name, `.` or `..` in
 
 ### 5. Reopening the app
 
-- On every process start, before any **Batch** can begin, abandoned files are settled: **Waiting** → **Not started**, **Copying** → **Interrupted**. Every `.part` file in the **Backup store** is deleted, and so is the folder `<batchId>/<fileId>/` of each file just marked **Interrupted**: the app may have stopped after the rename but before recording **Backed up**, and an **Interrupted** file keeps nothing.
+- On every process start, before any **Batch** can begin, abandoned files are settled. Settling starts in the app-wide scope as Koin starts, and a **Batch** started before it finishes waits for it. Settling turns **Waiting** → **Not started**, **Copying** → **Interrupted**. Every `.part` file in the **Backup store** is deleted, and so is the folder `<batchId>/<fileId>/` of each file just marked **Interrupted**: the app may have stopped after the rename but before recording **Backed up**, and an **Interrupted** file keeps nothing.
 - The screen shows the most recent **Batch**: when it was made, a count per **Outcome**, and one row per **Source file** with name, size, **Outcome** (or progress while running), the **Failure reason** when **Failed**, and **Open** when **Backed up**.
 
 ### 6. Opening a Backup copy
 
-**Open** hands the **Backup copy** (never the **Source file**) to a viewer app through a `FileProvider` scoped to `backups/` only, read-only, with the recorded MIME type. If no app handles the type, the system chooser says so.
+**Open** hands the **Backup copy** (never the **Source file**) to a viewer app through a `FileProvider` (authority `<applicationId>.backups`) scoped to `backups/` only. `MainActivity` launches `ACTION_VIEW` with the recorded MIME type and only `FLAG_GRANT_READ_URI_PERMISSION`, through a chooser. If no app handles the type, the system chooser says so.
 
 ## Architecture
 
 Layer-based MVVM with Clean Architecture, one Gradle module, Koin for DI.
 
 ```
+(root)            BackupApplication (starts Koin), MainActivity (hosts BackupScreen, opens Backup copies)
 ui/               BackupScreen, BackupViewModel, BackupUiState
 domain/
   models/         Batch, BatchFile, SourceFile, FileState, FailureReason, BackupCopy
@@ -67,7 +68,7 @@ data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
   mappers/        BackupCopyNameMapper, BackupStoreFailureMapper, BatchFileRecordMapper, SourceFileMapper
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
-di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
+di/               AppModule (app-wide scope, settling on start), DataModule, DomainModule, UiModule
 extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
 ```
 
@@ -75,7 +76,7 @@ extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any
 |---|---|---|
 | `BatchRepository` | Room, only through `BatchDatabaseManager` (ADR-0003) | The record of **Batches** and **Outcomes** |
 | `SourceFileRepository` | `ContentResolver` | Read-only access to **Source files**: name, size, MIME type, stream |
-| `BackupCopyRepository` | App-private files | Writing, confirming, opening and deleting **Backup copies** (steps 3–6 above) |
+| `BackupCopyRepository` | App-private files | Writing, confirming and deleting **Backup copies** (steps 3–6 above) |
 
 `BackupCopyRepository` reports the failures only the data layer can tell apart (`ENOSPC`, a mismatch, any other write-side error) as `BackupCopyFailedException` carrying its **Failure reason**. Exceptions from the **Source file**'s stream reach `RunBatch` unchanged, and `RunBatch` maps them using the table in section 3.
 
@@ -99,9 +100,9 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
 | `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
-| `BackupViewModel` | JVM, fakes | Picks append in order without duplicates; starting clears the selection and backs up what was selected; a second tap starts nothing; state follows the latest **Batch**, running included |
+| `BackupViewModel` | JVM, fakes | Picks append in order without duplicates; starting clears the selection and backs up what was selected; a second tap starts nothing; state follows the latest **Batch**, running included; a **Batch** started before settling finishes waits for it |
 
-Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
+Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`), the Koin modules and `MainActivity` (running the app resolves every binding and exercises **Open**).
 
 ## Demo and seed scripts
 
