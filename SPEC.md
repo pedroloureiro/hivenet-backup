@@ -64,7 +64,7 @@ domain/
   BackupCopyFailedException
 data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
-  mappers/        BackupCopyNameMapper, BackupStoreFailureMapper, BatchFileRecordMapper
+  mappers/        BackupCopyNameMapper, BackupStoreFailureMapper, BatchFileRecordMapper, SourceFileMapper
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
@@ -100,7 +100,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
 | `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
 
-Not unit-tested: composables, `SourceFileRepositoryImpl` (its fallbacks are plain defaults; the demo proves it), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
+Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
 
 ## Demo and seed scripts
 
