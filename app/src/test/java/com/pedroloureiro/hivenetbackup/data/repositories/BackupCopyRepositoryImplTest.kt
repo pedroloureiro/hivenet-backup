@@ -1,4 +1,4 @@
-package com.pedroloureiro.hivenetbackup.data
+package com.pedroloureiro.hivenetbackup.data.repositories
 
 import com.pedroloureiro.hivenetbackup.domain.BackupCopyFailedException
 import com.pedroloureiro.hivenetbackup.domain.models.BackupCopy

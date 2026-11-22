@@ -1,4 +1,4 @@
-package com.pedroloureiro.hivenetbackup.data
+package com.pedroloureiro.hivenetbackup.data.repositories
 
 import com.pedroloureiro.hivenetbackup.data.mappers.toBackupCopyName
 import com.pedroloureiro.hivenetbackup.data.mappers.toBackupStoreFailureReason

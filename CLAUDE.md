@@ -42,7 +42,8 @@
 - Add a use case only when an operation has logic of its own. The ViewModel reads `BatchRepository` directly for plain reads.
 - Only `BatchDatabaseManager` touches the DAO (ADR-0003). Each of its operations enforces a rule or is a read the system needs; a method that only forwards one DAO call is not allowed.
 - Repository implementations map between data and domain; rules live in use cases or the manager.
-- Keep repository implementations to orchestration. Conversions (data ↔ domain, exception → **Failure reason**, display name → file name) are top-level extension functions in `data/mappers/`.
+- Keep repository implementations to orchestration. Conversions (data ↔ domain, exception → **Failure reason**, display name → file name, a provider `Cursor` row → **Source file**) are top-level extension functions in `data/mappers/`, together with the private helpers they need.
+- `BatchDatabaseManager` wraps Room only. A `Cursor` from `ContentResolver` is the document provider's answer about a **Source file**, not our database, so it never goes through the manager.
 - **Batches** run only in the app-wide scope provided by Koin (ADR-0002), never in `viewModelScope`.
 
 ### Folder structure
