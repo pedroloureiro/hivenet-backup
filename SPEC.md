@@ -56,7 +56,7 @@ Layer-based MVVM with Clean Architecture, one Gradle module, Koin for DI.
 ```
 ui/               BackupScreen, BackupViewModel, BackupUiState
 domain/
-  models/         Batch, BatchFile, SourceFile, FileState, Outcome, FailureReason, BackupCopy, Fingerprint
+  models/         Batch, BatchFile, SourceFile, FileState, Outcome, FailureReason, BackupCopy
   repositories/   BatchRepository, BackupCopyRepository, SourceFileRepository
   usecases/       RunBatch, SettleAbandonedBatch
   BackupCopyFailedException
