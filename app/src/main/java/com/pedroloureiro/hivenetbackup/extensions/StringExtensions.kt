@@ -1,4 +1,4 @@
-package com.pedroloureiro.hivenetbackup.data.extensions
+package com.pedroloureiro.hivenetbackup.extensions
 
 fun String.utf8Bytes(): Int = toByteArray(Charsets.UTF_8).size
 

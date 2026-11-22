@@ -1,4 +1,4 @@
-package com.pedroloureiro.hivenetbackup.data.extensions
+package com.pedroloureiro.hivenetbackup.extensions
 
 import java.io.File
 import java.security.MessageDigest

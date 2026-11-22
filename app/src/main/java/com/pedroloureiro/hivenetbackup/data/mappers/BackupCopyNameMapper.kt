@@ -1,7 +1,7 @@
 package com.pedroloureiro.hivenetbackup.data.mappers
 
-import com.pedroloureiro.hivenetbackup.data.extensions.cutToUtf8Bytes
-import com.pedroloureiro.hivenetbackup.data.extensions.utf8Bytes
+import com.pedroloureiro.hivenetbackup.extensions.cutToUtf8Bytes
+import com.pedroloureiro.hivenetbackup.extensions.utf8Bytes
 
 private const val MAX_EXTENSION_BYTES = 32
 

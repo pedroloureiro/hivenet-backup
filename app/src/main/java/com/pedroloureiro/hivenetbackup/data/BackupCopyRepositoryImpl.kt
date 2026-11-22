@@ -1,6 +1,5 @@
 package com.pedroloureiro.hivenetbackup.data
 
-import com.pedroloureiro.hivenetbackup.data.extensions.digest
 import com.pedroloureiro.hivenetbackup.data.mappers.toBackupCopyName
 import com.pedroloureiro.hivenetbackup.data.mappers.toBackupStoreFailureReason
 import com.pedroloureiro.hivenetbackup.domain.BackupCopyFailedException
@@ -8,6 +7,7 @@ import com.pedroloureiro.hivenetbackup.domain.models.BackupCopy
 import com.pedroloureiro.hivenetbackup.domain.models.BatchFile
 import com.pedroloureiro.hivenetbackup.domain.models.FailureReason
 import com.pedroloureiro.hivenetbackup.domain.repositories.BackupCopyRepository
+import com.pedroloureiro.hivenetbackup.extensions.digest
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
