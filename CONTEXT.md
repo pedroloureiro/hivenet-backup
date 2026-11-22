@@ -60,6 +60,14 @@ _Avoid_: error message, exception
 
 While a **Batch** is running, each **Source file** is **Waiting** (its turn has not come) or **Copying**. These are not **Outcomes**: once the app stops, a file still **Waiting** becomes **Not started** and one still **Copying** becomes **Interrupted**.
 
+**Batch file**:
+One **Source file** as recorded in a **Batch**, with its place in the order and its **File state**. The same **Source file** in two **Batches** is two **Batch files**.
+_Avoid_: entry, item, row
+
+**File state**:
+Where a **Batch file** stands: **Waiting** or **Copying** while the **Batch** runs, then its **Outcome**.
+_Avoid_: status
+
 ## Flagged ambiguities
 
 - "Atomicity" means **per file**: each **Source file** either ends as a **Backup copy** or leaves nothing behind. A **Batch** is never all-or-nothing; one file failing does not affect the others.

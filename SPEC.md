@@ -56,9 +56,10 @@ Layer-based MVVM with Clean Architecture, one Gradle module, Koin for DI.
 ```
 ui/               BackupScreen, BackupViewModel, BackupUiState
 domain/
-  models/         Batch, SourceFile, Outcome, FailureReason, Fingerprint
+  models/         Batch, BatchFile, SourceFile, FileState, Outcome, FailureReason, BackupCopy, Fingerprint
   repositories/   BatchRepository, BackupCopyRepository, SourceFileRepository
   usecases/       RunBatch, SettleAbandonedBatch
+  BackupCopyFailedException
 data/
   entities/       BatchEntity, BatchFileEntity
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
@@ -71,6 +72,8 @@ di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 | `BatchRepository` | Room, only through `BatchDatabaseManager` (ADR-0003) | The record of **Batches** and **Outcomes** |
 | `SourceFileRepository` | `ContentResolver` | Read-only access to **Source files**: name, size, MIME type, stream |
 | `BackupCopyRepository` | App-private files | Writing, confirming, opening and deleting **Backup copies** (steps 3–6 above) |
+
+`BackupCopyRepository` reports the failures only the data layer can tell apart (`ENOSPC`, a mismatch, any other write-side error) as `BackupCopyFailedException` carrying its **Failure reason**. Exceptions from the **Source file**'s stream reach `RunBatch` unchanged, and `RunBatch` maps them using the table in section 3.
 
 `BatchDatabaseManager` operations: create a **Batch** with its files (one transaction), mark a file **Copying**, record a final **Outcome** (rejected if the file already has one), settle abandoned files, observe the latest **Batch**.
 
