@@ -104,7 +104,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | Class | Kind | Proves |
 |---|---|---|
 | `RunBatch` | JVM, fakes | Records the **Batch**; order; isolation; each **Failure reason** from its real cause, Downloads' `SecurityException` included; space check fails only the file that doesn't fit, unknown sizes skip it; exactly one **Outcome** per file; cancellation and a failed record stop the **Batch** |
-| `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM |
+| `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM (`fill-storage.sh` proves `ENOSPC` on the emulator) |
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state other than **Removed**, so it never changes; **Removed** only from **Backed up**, clearing the copy; settle rules and the files it marks **Interrupted**; the **Removed** files; latest **Batch** with files in picked order; every **Backed up** file, newest **Batch** first |
 | `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** or finds **Removed** |
@@ -115,15 +115,17 @@ Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` 
 
 ## Demo and seed scripts
 
-`scripts/`, plain `adb` and shell, run against whatever device or emulator is connected:
+`scripts/`, plain `adb` and shell, run against whatever device or emulator is connected (`ANDROID_SERIAL` picks one when several are). `seed.sh` writes into `/sdcard/Download/PrepareForBackup/`, emptied first; the other scripts take a name relative to that folder.
 
 | Script | Purpose |
 |---|---|
 | `seed.sh` | Text, image, PDF, 0-byte, 1 GB, same-named pair in two folders, emoji and very long names; then a media scan |
-| `fail-delete-source.sh <name>` | Delete a picked file → Source no longer available |
-| `fill-storage.sh` / `free-storage.sh` | **Emulator only.** Leave ~50 MB free, then undo → Not enough space |
-| `grow-file.sh <name>` | Keep appending to a file → Copy didn't match source |
+| `fail-delete-source.sh <name>` | Delete a picked file before backing it up → Source no longer available |
+| `fill-storage.sh` / `free-storage.sh` | **Emulator only.** Leave ~50 MB free (1 MB over the space margin), then undo. Backing up the 1 GB file → Not enough space from the pre-check while small files still fit; running `fill-storage.sh` while the 1 GB file is copying → Not enough space from `ENOSPC` while writing |
+| `grow-file.sh <name>` | Keep appending to a picked file while it is backed up → Copy didn't match source (byte count) |
 | `adb shell am force-stop <package>` | Kill mid-**Batch** → **Interrupted** and **Not started** |
+
+No script produces a re-read **Fingerprint** mismatch: the `.part` file would have to change between `fsync` and the re-read. It stays a defensive check.
 
 ## Platform and stack
 
