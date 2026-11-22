@@ -7,7 +7,7 @@ What the app does and how it is built. Terms in **bold** are defined in [CONTEXT
 ### 1. Picking Source files
 
 - **Select files** opens the system document picker (`ACTION_OPEN_DOCUMENT`, multiple selection, any type).
-- For each picked file the app reads its display name, its reported size (may be unknown) and its MIME type, and lists the selection with name and size.
+- For each picked file the app reads its display name, its reported size (may be unknown) and its MIME type, and lists the selection with name and size. Reading is best effort: a missing name falls back to the URI's last path segment (or `unnamed`), a missing MIME type to `application/octet-stream`, and a missing or negative size to unknown.
 - The selection lives in memory only. Nothing is recorded until the user starts a **Batch**. **Clear** empties it.
 - While a **Batch** is running, **Select files** and **Back up** are disabled.
 
@@ -64,7 +64,7 @@ domain/
   BackupCopyFailedException
 data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
-  mappers/        BackupCopyNameMapper, BackupStoreFailureMapper
+  mappers/        BackupCopyNameMapper, BackupStoreFailureMapper, BatchFileRecordMapper
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
@@ -96,10 +96,11 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | `RunBatch` | JVM, fakes | Order; isolation; each **Failure reason** from its real cause; space check fails only the file that doesn't fit; exactly one **Outcome** per file |
 | `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM |
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
+| `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
 | `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
 
-Not unit-tested: composables, `SourceFileRepositoryImpl` (proven by the demo), `BatchRepositoryImpl` (mapping only, covered through the above).
+Not unit-tested: composables, `SourceFileRepositoryImpl` (its fallbacks are plain defaults; the demo proves it), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
 
 ## Demo and seed scripts
 
