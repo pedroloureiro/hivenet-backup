@@ -11,6 +11,7 @@ You are the implementer of this PR, not a neutral reviewer. You know why the cod
 ## 1. Gather
 
 - PR: `$ARGUMENTS`, else `gh pr view --json number` on the current branch.
+- Check out the PR branch and `git pull` it before changing anything. If `origin/main` moved, say so; rebase only if Pedro asks.
 - Pull every comment. Pedro often leaves them in a **pending** review, which the normal listing doesn't show:
   - `gh api repos/{owner}/{repo}/pulls/N/reviews` (note every review id, including `PENDING`)
   - `gh api repos/{owner}/{repo}/pulls/N/comments`
@@ -62,6 +63,11 @@ Before touching code, write the verdicts in chat: one line per comment with its 
 - Use glossary terms in **bold** where they matter. No attribution or tagline.
 - Never resolve threads: Pedro resolves them.
 
-## 6. Report back in chat
+## 6. Consolidate learnings in the same PR
+
+- A comment that sets a lasting convention (naming, placement, structure, testing, workflow) goes into CLAUDE.md in this PR as a `docs:` commit, so it applies to every later task without being restated. Keep each rule short and concrete, with an example from this codebase.
+- Don't duplicate it in personal memory; memory keeps only what the repo can't (e.g. a reply still pending from Pedro).
+
+## 7. Report back in chat
 
 A short table: comment → verdict → what was done or why not, then commits, test and lint results, and anything waiting on Pedro.
