@@ -28,6 +28,7 @@
 - No single-value wrapper types (e.g. a value class around a `String`) unless they carry operations or rules of their own.
 - Prefer one flat sealed type over a layered hierarchy (e.g. `FileState` holds all six states; there is no separate `Outcome` type).
 - Parameter names match their type (`fileState: FileState`).
+- No `!!`. Resolve a nullable where it arises: build the value so it isn't nullable (`folderOf(batchId, batchFileId)` instead of `file.parentFile!!`), or handle the `null` case. Tests included.
 - Units go in the name, not in a comment: `createdAtEpochMs`, `maxBytes`, `BUFFER_BYTES`.
 - Before adding a table, entity or carrier type, check it can't be a column or an existing type.
 - Split a long method into named private steps, so the public method reads as the sequence of what it does.
