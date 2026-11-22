@@ -9,7 +9,7 @@ interface BackupCopyRepository {
 
   suspend fun write(batchId: Long, file: BatchFile, source: InputStream): BackupCopy
 
-  fun contentUriFor(copy: BackupCopy): String
-
   suspend fun deletePartFiles()
+
+  suspend fun deleteFolderOf(batchId: Long, batchFileId: Long)
 }
