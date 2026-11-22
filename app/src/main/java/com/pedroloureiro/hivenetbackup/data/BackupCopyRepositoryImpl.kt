@@ -26,17 +26,17 @@ class BackupCopyRepositoryImpl(private val backupStore: File) : BackupCopyReposi
   }
 
   override suspend fun write(batchId: Long, file: BatchFile, source: InputStream): BackupCopy = withContext(Dispatchers.IO) {
-    val relativePath = "$batchId/${file.id}/${file.sourceFile.displayName.toBackupCopyName(MAX_NAME_BYTES)}"
-    val backupCopyFile = File(backupStore, relativePath)
-    val partFile = File(backupCopyFile.path + PART_SUFFIX)
+    val folder = folderOf(batchId, file.id)
+    val backupCopyFile = File(folder, file.sourceFile.displayName.toBackupCopyName(MAX_NAME_BYTES))
+    val partFile = File(folder, backupCopyFile.name + PART_SUFFIX)
     try {
-      backupCopyFile.parentFile!!.mkdirs()
+      folder.mkdirs()
       val fingerprint = copyToPartFile(source, partFile, file.sourceFile.reportedSize)
       confirm(partFile, fingerprint)
       inBackupStore { Files.move(partFile.toPath(), backupCopyFile.toPath(), StandardCopyOption.ATOMIC_MOVE) }
-      BackupCopy(relativePath = relativePath, fingerprint = fingerprint, storedSize = backupCopyFile.length())
+      BackupCopy(relativePath = backupCopyFile.relativeTo(backupStore).path, fingerprint = fingerprint, storedSize = backupCopyFile.length())
     } catch (failure: Throwable) {
-      backupCopyFile.parentFile!!.deleteRecursively()
+      folder.deleteRecursively()
       throw failure
     }
   }
@@ -46,8 +46,10 @@ class BackupCopyRepositoryImpl(private val backupStore: File) : BackupCopyReposi
   }
 
   override suspend fun deleteFolderOf(batchId: Long, batchFileId: Long) {
-    withContext(Dispatchers.IO) { File(backupStore, "$batchId/$batchFileId").deleteRecursively() }
+    withContext(Dispatchers.IO) { folderOf(batchId, batchFileId).deleteRecursively() }
   }
+
+  private fun folderOf(batchId: Long, batchFileId: Long) = File(backupStore, "$batchId/$batchFileId")
 
   // Returns the Fingerprint of the bytes read from the source.
   private fun copyToPartFile(source: InputStream, partFile: File, reportedSize: Long?): String {

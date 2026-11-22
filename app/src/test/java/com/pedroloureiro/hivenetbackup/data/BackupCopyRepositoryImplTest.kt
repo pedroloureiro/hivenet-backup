@@ -42,7 +42,7 @@ class BackupCopyRepositoryImplTest {
     assertEquals("1/7/photo.jpg", backupCopy.relativePath)
     assertEquals(bytes.size.toLong(), backupCopy.storedSize)
     assertArrayEquals(bytes, File(backupStore, backupCopy.relativePath).readBytes())
-    assertEquals(listOf("photo.jpg"), File(backupStore, "1/7").list()!!.toList())
+    assertEquals(listOf("photo.jpg"), File(backupStore, "1/7").list()?.toList())
   }
 
   @Test
@@ -144,7 +144,7 @@ class BackupCopyRepositoryImplTest {
   @Test
   fun `deletes part files and keeps Backup copies`() = runTest {
     val backupCopy = write("kept.txt", "kept".toByteArray())
-    val partFile = File(backupStore, "1/8/half.txt.part").apply { parentFile!!.mkdirs(); writeText("half") }
+    val partFile = File(File(backupStore, "1/8").apply { mkdirs() }, "half.txt.part").apply { writeText("half") }
 
     repository.deletePartFiles()
 
@@ -154,13 +154,13 @@ class BackupCopyRepositoryImplTest {
 
   @Test
   fun `deletes only the folder of the given file`() = runTest {
-    val deleted = write("a.txt", "a".toByteArray())
+    write("a.txt", "a".toByteArray())
     val sameBatch = repository.write(batchId = 1, file = batchFile(id = 8, "b.txt"), source = "b".byteInputStream())
     val otherBatch = repository.write(batchId = 2, file = batchFile(id = 7, "c.txt"), source = "c".byteInputStream())
 
     repository.deleteFolderOf(batchId = 1, batchFileId = 7)
 
-    assertFalse(File(backupStore, deleted.relativePath).parentFile!!.exists())
+    assertFalse(File(backupStore, "1/7").exists())
     assertTrue(File(backupStore, sameBatch.relativePath).exists())
     assertTrue(File(backupStore, otherBatch.relativePath).exists())
   }
