@@ -24,7 +24,7 @@ Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
    5. `fsync` the temporary file, read it back and hash it again. A different hash is **Failed: Copy didn't match source**.
    6. Rename the temporary file to its final name. Only now is the file **Backed up**, recorded with its **Fingerprint** and stored size.
    7. On any failure the file's folder, which holds only its temporary file, is deleted, the **Failure reason** recorded, and the next file starts.
-3. Every file ends with exactly one final **Outcome**. Only cancellation of the scope (process death) stops the loop.
+3. Every file ends with exactly one final **Outcome**. Only cancellation of the scope (process death) or a failure to record a **File state** stops the loop. A refused or failed record is a bug or a broken database, not a problem with the file, so no **Failure reason** is recorded for it: the **Batch** stops, and the next start settles its files (section 5).
 
 ### 3. Failure reasons
 
@@ -93,7 +93,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 
 | Class | Kind | Proves |
 |---|---|---|
-| `RunBatch` | JVM, fakes | Order; isolation; each **Failure reason** from its real cause; space check fails only the file that doesn't fit; exactly one **Outcome** per file |
+| `RunBatch` | JVM, fakes | Records the **Batch**; order; isolation; each **Failure reason** from its real cause, Downloads' `SecurityException` included; space check fails only the file that doesn't fit, unknown sizes skip it; exactly one **Outcome** per file; cancellation and a failed record stop the **Batch** |
 | `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM |
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
 | `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |

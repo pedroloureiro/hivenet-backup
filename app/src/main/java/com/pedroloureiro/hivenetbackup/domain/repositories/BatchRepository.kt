@@ -1,6 +1,7 @@
 package com.pedroloureiro.hivenetbackup.domain.repositories
 
 import com.pedroloureiro.hivenetbackup.domain.models.Batch
+import com.pedroloureiro.hivenetbackup.domain.models.BatchFile
 import com.pedroloureiro.hivenetbackup.domain.models.FileState
 import com.pedroloureiro.hivenetbackup.domain.models.SourceFile
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,7 @@ interface BatchRepository {
 
   suspend fun recordOutcome(batchFileId: Long, fileState: FileState)
 
-  suspend fun settleAbandoned()
+  suspend fun settleAbandoned(): List<BatchFile>
 
   fun observeLatest(): Flow<Batch?>
 }

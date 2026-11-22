@@ -56,6 +56,7 @@ Inside a folder, files of the same kind (models, repositories, managers, use cas
 - Never record **Backed up** before that rename has succeeded.
 - On failure, delete the file's `<batchId>/<fileId>/` folder (which holds only its `.part` file) before recording the **Outcome**.
 - Inside the per-file loop, catch everything except `CancellationException`, map it to a **Failure reason**, record it, and move on.
+- Recording a **File state** (`markCopying`, `recordOutcome`) stays outside that catch: a refused or failed record stops the **Batch**, and the next start settles it.
 - Never modify, move or delete a **Source file**.
 
 ## UI
