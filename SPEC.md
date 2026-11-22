@@ -108,7 +108,7 @@ Not unit-tested: composables, `SourceFileRepositoryImpl` (proven by the demo), `
 
 ## Platform and stack
 
-minSdk 26, target and compile SDK 36. Kotlin, Jetpack Compose (Material 3), Coroutines and Flow, Room with KSP, Koin. Tests: JUnit 4, kotlinx-coroutines-test, Robolectric. Exact versions are pinned at setup.
+minSdk 26, target SDK 37, compile SDK 37.1. Kotlin 2.4.21, AGP 9.3.3, Gradle 9.7.1, Java 17 bytecode (ADR-0004). Jetpack Compose BOM 2026.11.01 (Material 3), Coroutines 1.11.0 (BOM-aligned) and Flow, Room 2.8.5 with KSP 2.3.14, Koin 4.2.2. Tests: JUnit 4, kotlinx-coroutines-test, Robolectric 4.18.1 on a Java 21 test launcher. Versions live in `gradle/libs.versions.toml`.
 
 ## Future improvements
 
