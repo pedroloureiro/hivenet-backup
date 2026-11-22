@@ -2,10 +2,8 @@ package com.pedroloureiro.hivenetbackup.data
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.pedroloureiro.hivenetbackup.data.entities.BatchFileEntity
-import com.pedroloureiro.hivenetbackup.data.entities.BatchFileEntity.FailureReason
-import com.pedroloureiro.hivenetbackup.data.entities.BatchFileEntity.State
-import com.pedroloureiro.hivenetbackup.data.entities.BatchFileOutcome
+import com.pedroloureiro.hivenetbackup.data.BatchFileRecord.FailureReason
+import com.pedroloureiro.hivenetbackup.data.BatchFileRecord.State
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -37,55 +35,70 @@ class BatchDatabaseManagerTest {
 
   @Test
   fun `creates a batch with every file waiting in picked order`() = runTest {
-    val batch = manager.createBatch(createdAt = 1_000, files = listOf(file("b.txt"), file("a.txt"), file("c.txt")))
+    val batch = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("b.txt"), record("a.txt"), record("c.txt")))
 
-    assertEquals(1_000L, batch.batch.createdAt)
-    assertEquals(listOf("b.txt", "a.txt", "c.txt"), batch.files.map { it.displayName })
-    assertEquals(listOf(0, 1, 2), batch.files.map { it.position })
-    assertTrue(batch.files.all { it.batchId == batch.batch.id && it.state == State.WAITING })
+    assertEquals(listOf("b.txt", "a.txt", "c.txt"), batch.map { it.displayName })
+    assertEquals(listOf(0, 1, 2), batch.map { it.position })
+    assertTrue(batch.all { it.batchId == 1L && it.batchCreatedAtEpochMs == 1_000L && it.state == State.WAITING })
     assertEquals(batch, manager.observeLatest().first())
   }
 
   @Test
-  fun `records nothing when one file of a batch cannot be stored`() = runTest {
-    val clashingFiles = listOf(file("a.txt").copy(id = 7), file("b.txt").copy(id = 7))
+  fun `gives each new batch the next batch id`() = runTest {
+    manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt")))
 
-    val failure = runCatching { manager.createBatch(createdAt = 1_000, files = clashingFiles) }.exceptionOrNull()
+    val second = manager.createBatch(createdAtEpochMs = 2_000, records = listOf(record("b.txt")))
+
+    assertEquals(2L, second.single().batchId)
+  }
+
+  @Test
+  fun `refuses an empty batch`() = runTest {
+    val failure = runCatching { manager.createBatch(createdAtEpochMs = 1_000, records = emptyList()) }.exceptionOrNull()
+
+    assertTrue("Expected IllegalArgumentException, got $failure", failure is IllegalArgumentException)
+  }
+
+  @Test
+  fun `records nothing when one file of a batch cannot be stored`() = runTest {
+    val clashingRecords = listOf(record("a.txt").copy(id = 7), record("b.txt").copy(id = 7))
+
+    val failure = runCatching { manager.createBatch(createdAtEpochMs = 1_000, records = clashingRecords) }.exceptionOrNull()
 
     assertTrue(failure != null)
-    assertNull(manager.observeLatest().first())
+    assertEquals(emptyList<BatchFileRecord>(), manager.observeLatest().first())
   }
 
   @Test
   fun `marks a waiting file copying`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
 
-    manager.markCopying(fileId)
+    manager.markCopying(recordId)
 
-    assertEquals(State.COPYING, latestFile().state)
+    assertEquals(State.COPYING, latestRecord().state)
   }
 
   @Test
   fun `refuses to mark copying a file that is not waiting`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
-    manager.markCopying(fileId)
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
 
-    assertRefused { manager.markCopying(fileId) }
+    assertRefused { manager.markCopying(recordId) }
 
-    manager.recordOutcome(backedUp(fileId))
+    manager.recordOutcome(backedUp(recordId))
 
-    assertRefused { manager.markCopying(fileId) }
-    assertEquals(State.BACKED_UP, latestFile().state)
+    assertRefused { manager.markCopying(recordId) }
+    assertEquals(State.BACKED_UP, latestRecord().state)
   }
 
   @Test
   fun `records the outcome of a copying file`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
-    manager.markCopying(fileId)
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
 
-    manager.recordOutcome(backedUp(fileId))
+    manager.recordOutcome(backedUp(recordId))
 
-    val recorded = latestFile()
+    val recorded = latestRecord()
     assertEquals(State.BACKED_UP, recorded.state)
     assertEquals("1/1/a.txt", recorded.relativePath)
     assertEquals("ab12", recorded.fingerprint)
@@ -95,19 +108,19 @@ class BatchDatabaseManagerTest {
 
   @Test
   fun `records a failure with its reason and detail`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
-    manager.markCopying(fileId)
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
 
     manager.recordOutcome(
       BatchFileOutcome(
-        id = fileId,
+        id = recordId,
         state = State.FAILED,
         failureReason = FailureReason.UNEXPECTED_ERROR,
         failureDetail = "EIO",
       ),
     )
 
-    val recorded = latestFile()
+    val recorded = latestRecord()
     assertEquals(State.FAILED, recorded.state)
     assertEquals(FailureReason.UNEXPECTED_ERROR, recorded.failureReason)
     assertEquals("EIO", recorded.failureDetail)
@@ -116,45 +129,45 @@ class BatchDatabaseManagerTest {
 
   @Test
   fun `refuses an outcome for a file that is not copying yet`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
 
-    assertRefused { manager.recordOutcome(backedUp(fileId)) }
+    assertRefused { manager.recordOutcome(backedUp(recordId)) }
 
-    assertEquals(State.WAITING, latestFile().state)
+    assertEquals(State.WAITING, latestRecord().state)
   }
 
   @Test
   fun `never changes an outcome once recorded`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
-    manager.markCopying(fileId)
-    manager.recordOutcome(backedUp(fileId))
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
+    manager.recordOutcome(backedUp(recordId))
 
     assertRefused {
       manager.recordOutcome(
-        BatchFileOutcome(id = fileId, state = State.FAILED, failureReason = FailureReason.NOT_ENOUGH_SPACE),
+        BatchFileOutcome(id = recordId, state = State.FAILED, failureReason = FailureReason.NOT_ENOUGH_SPACE),
       )
     }
 
-    assertEquals(State.BACKED_UP, latestFile().state)
-    assertEquals("ab12", latestFile().fingerprint)
+    assertEquals(State.BACKED_UP, latestRecord().state)
+    assertEquals("ab12", latestRecord().fingerprint)
   }
 
   @Test
   fun `refuses a state that is not final as an outcome`() = runTest {
-    val fileId = manager.createBatch(createdAt = 1_000, files = listOf(file("a.txt"))).files.single().id
-    manager.markCopying(fileId)
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
 
-    assertRefused { manager.recordOutcome(BatchFileOutcome(id = fileId, state = State.WAITING)) }
-    assertRefused { manager.recordOutcome(BatchFileOutcome(id = fileId, state = State.COPYING)) }
+    assertRefused { manager.recordOutcome(BatchFileOutcome(id = recordId, state = State.WAITING)) }
+    assertRefused { manager.recordOutcome(BatchFileOutcome(id = recordId, state = State.COPYING)) }
 
-    assertEquals(State.COPYING, latestFile().state)
+    assertEquals(State.COPYING, latestRecord().state)
   }
 
   @Test
   fun `settles abandoned files in every batch and leaves outcomes alone`() = runTest {
-    val older = manager.createBatch(createdAt = 1_000, files = listOf(file("old.txt")))
-    val latest = manager.createBatch(createdAt = 2_000, files = listOf(file("done.txt"), file("busy.txt"), file("next.txt")))
-    val (done, busy, _) = latest.files.map { it.id }
+    val older = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("old.txt"))).single()
+    val latest = manager.createBatch(createdAtEpochMs = 2_000, records = listOf(record("done.txt"), record("busy.txt"), record("next.txt")))
+    val (done, busy, _) = latest.map { it.id }
     manager.markCopying(done)
     manager.recordOutcome(backedUp(done))
     manager.markCopying(busy)
@@ -163,43 +176,58 @@ class BatchDatabaseManagerTest {
 
     assertEquals(
       listOf(State.BACKED_UP, State.INTERRUPTED, State.NOT_STARTED),
-      manager.observeLatest().first()!!.files.map { it.state },
+      manager.observeLatest().first().map { it.state },
     )
-    assertEquals(State.NOT_STARTED, database.backupDao().batchWithFiles(older.batch.id).files.single().state)
+    assertEquals(State.NOT_STARTED, database.backupDao().batch(older.batchId).single().state)
+  }
+
+  @Test
+  fun `returns only the files it marks interrupted when settling`() = runTest {
+    val older = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("old.txt"))).single()
+    manager.markCopying(older.id)
+    manager.settleAbandoned()
+    val latest = manager.createBatch(createdAtEpochMs = 2_000, records = listOf(record("busy.txt"), record("next.txt")))
+    manager.markCopying(latest.first().id)
+
+    val interrupted = manager.settleAbandoned()
+
+    assertEquals(listOf(latest.first().id), interrupted.map { it.id })
+    assertEquals(State.INTERRUPTED, interrupted.single().state)
+    assertEquals(2L, interrupted.single().batchId)
   }
 
   @Test
   fun `observes nothing before any batch exists`() = runTest {
-    assertNull(manager.observeLatest().first())
+    assertEquals(emptyList<BatchFileRecord>(), manager.observeLatest().first())
   }
 
   @Test
   fun `observes the most recent batch with its files in picked order`() = runTest {
-    manager.createBatch(createdAt = 5_000, files = listOf(file("old.txt")))
-    manager.createBatch(createdAt = 1_000, files = listOf(file("z.txt"), file("y.txt"), file("x.txt")))
+    manager.createBatch(createdAtEpochMs = 5_000, records = listOf(record("old.txt")))
+    manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("z.txt"), record("y.txt"), record("x.txt")))
 
-    val latest = manager.observeLatest().first()!!
+    val latest = manager.observeLatest().first()
 
-    assertEquals(1_000L, latest.batch.createdAt)
-    assertEquals(listOf("z.txt", "y.txt", "x.txt"), latest.files.map { it.displayName })
+    assertEquals(listOf("z.txt", "y.txt", "x.txt"), latest.map { it.displayName })
+    assertTrue(latest.all { it.batchCreatedAtEpochMs == 1_000L })
   }
 
-  private suspend fun latestFile(): BatchFileEntity = manager.observeLatest().first()!!.files.single()
+  private suspend fun latestRecord(): BatchFileRecord = manager.observeLatest().first().single()
 
   private suspend fun assertRefused(change: suspend () -> Unit) {
     val failure = runCatching { change() }.exceptionOrNull()
     assertTrue("Expected IllegalStateException, got $failure", failure is IllegalStateException)
   }
 
-  private fun file(name: String) = BatchFileEntity(
+  private fun record(name: String) = BatchFileRecord(
     sourceUri = "content://test/$name",
     displayName = name,
     mimeType = "text/plain",
     reportedSize = 4,
   )
 
-  private fun backedUp(fileId: Long) = BatchFileOutcome(
-    id = fileId,
+  private fun backedUp(recordId: Long) = BatchFileOutcome(
+    id = recordId,
     state = State.BACKED_UP,
     storedSize = 4,
     fingerprint = "ab12",

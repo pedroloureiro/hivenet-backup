@@ -1,25 +1,14 @@
-package com.pedroloureiro.hivenetbackup.data.entities
+package com.pedroloureiro.hivenetbackup.data
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(
-  tableName = "batch_files",
-  foreignKeys = [
-    ForeignKey(
-      entity = BatchEntity::class,
-      parentColumns = ["id"],
-      childColumns = ["batchId"],
-      onDelete = ForeignKey.CASCADE,
-    ),
-  ],
-  indices = [Index("batchId")],
-)
-data class BatchFileEntity(
+@Entity(tableName = "batch_file_records", indices = [Index("batchId")])
+data class BatchFileRecord(
   @PrimaryKey(autoGenerate = true) val id: Long = 0,
   val batchId: Long = 0,
+  val batchCreatedAtEpochMs: Long = 0,
   val position: Int = 0,
   val sourceUri: String,
   val displayName: String,
