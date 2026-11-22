@@ -28,9 +28,19 @@ class BatchRepositoryImpl(private val batchDatabaseManager: BatchDatabaseManager
     batchDatabaseManager.recordOutcome(fileState.toBatchFileOutcome(batchFileId))
   }
 
+  override suspend fun markRemoved(batchFileId: Long) {
+    batchDatabaseManager.markRemoved(batchFileId)
+  }
+
   override suspend fun settleAbandoned(): List<BatchFile> =
     batchDatabaseManager.settleAbandoned().map { it.toBatchFile() }
 
+  override suspend fun removedFiles(): List<BatchFile> =
+    batchDatabaseManager.removedRecords().map { it.toBatchFile() }
+
   override fun observeLatest(): Flow<Batch?> =
     batchDatabaseManager.observeLatest().map { records -> records.ifEmpty { null }?.toBatch() }
+
+  override fun observeBackedUp(): Flow<List<BatchFile>> =
+    batchDatabaseManager.observeBackedUp().map { records -> records.map { it.toBatchFile() } }
 }

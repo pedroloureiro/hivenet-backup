@@ -37,6 +37,18 @@ class SettleAbandonedBatchTest {
     assertEquals(listOf(1L to busy), backupCopyRepository.deletedFolders)
   }
 
+  @Test
+  fun `deletes the folder of every Removed file`() = runTest {
+    val batchFileId = batchRepository.create(listOf(sourceFileRepository.add("a.txt", "a"))).files.single().id
+    batchRepository.markCopying(batchFileId)
+    batchRepository.recordOutcome(batchFileId, FileState.BackedUp(backupCopyOf(batchId = 1, batchFileId = batchFileId, "a.txt", "a")))
+    batchRepository.markRemoved(batchFileId)
+
+    settleAbandonedBatch()
+
+    assertEquals(listOf(1L to batchFileId), backupCopyRepository.deletedFolders)
+  }
+
   // A Batch the app stopped during its second file.
   private suspend fun abandonedBatch(): List<Long> {
     val batch = batchRepository.create(

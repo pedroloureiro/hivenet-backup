@@ -29,6 +29,7 @@ class BatchFileRecordMapperTest {
       FileState.Failed(FailureReason.UnexpectedError("java.io.IOException: EIO")),
       FileState.Interrupted,
       FileState.NotStarted,
+      FileState.Removed,
     )
 
     fileStates.forEach { fileState ->

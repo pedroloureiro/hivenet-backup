@@ -15,6 +15,12 @@
     <string name="file_state_failed">Failed</string>
     <string name="file_state_interrupted">Interrupted</string>
     <string name="file_state_not_started">Not started</string>
+    <string name="file_state_removed">Removed</string>
+    <string name="backup_copies">Backup copies</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_backup_copy_title">Delete Backup copy?</string>
+    <string name="delete_backup_copy_text">The Backup copy of %1$s will be deleted. The file you picked isn\'t touched.</string>
     <string name="failed_because">Failed: %1$s</string>
     <string name="failure_source_no_longer_available">Source no longer available</string>
     <string name="failure_could_not_read_source">Couldn\'t read source</string>

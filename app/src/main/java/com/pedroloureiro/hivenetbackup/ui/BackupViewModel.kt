@@ -2,9 +2,11 @@ package com.pedroloureiro.hivenetbackup.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pedroloureiro.hivenetbackup.domain.models.BatchFile
 import com.pedroloureiro.hivenetbackup.domain.models.SourceFile
 import com.pedroloureiro.hivenetbackup.domain.repositories.BatchRepository
 import com.pedroloureiro.hivenetbackup.domain.repositories.SourceFileRepository
+import com.pedroloureiro.hivenetbackup.domain.usecases.RemoveBackupCopy
 import com.pedroloureiro.hivenetbackup.domain.usecases.RunBatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -21,13 +23,14 @@ class BackupViewModel(
   batchRepository: BatchRepository,
   private val sourceFileRepository: SourceFileRepository,
   private val runBatch: RunBatch,
+  private val removeBackupCopy: RemoveBackupCopy,
   // App-wide, so a Batch outlives the screen (ADR-0002).
   private val appScope: CoroutineScope,
   private val abandonedSettled: Job,
 ) : ViewModel() {
   private val selection = MutableStateFlow<List<SourceFile>>(emptyList())
 
-  val uiState: StateFlow<BackupUiState> = combine(selection, batchRepository.observeLatest(), ::BackupUiState)
+  val uiState: StateFlow<BackupUiState> = combine(selection, batchRepository.observeLatest(), batchRepository.observeBackedUp(), ::BackupUiState)
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), BackupUiState())
 
   fun addToSelection(uris: List<String>) {
@@ -49,6 +52,11 @@ class BackupViewModel(
       abandonedSettled.join()
       runBatch(sourceFiles)
     }
+  }
+
+  // App-wide, so leaving the screen can't stop it between recording Removed and deleting the copy.
+  fun remove(batchFile: BatchFile) {
+    appScope.launch { removeBackupCopy(batchFile) }
   }
 
   private companion object {

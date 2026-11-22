@@ -164,6 +164,78 @@ class BatchDatabaseManagerTest {
   }
 
   @Test
+  fun `refuses removed as an outcome`() = runTest {
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    manager.markCopying(recordId)
+
+    assertRefused { manager.recordOutcome(BatchFileOutcome(id = recordId, state = State.REMOVED)) }
+
+    assertEquals(State.COPYING, latestRecord().state)
+  }
+
+  @Test
+  fun `marks a backed up file removed and clears its copy`() = runTest {
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    backUp(recordId)
+
+    manager.markRemoved(recordId)
+
+    val recorded = latestRecord()
+    assertEquals(State.REMOVED, recorded.state)
+    assertNull(recorded.relativePath)
+    assertNull(recorded.fingerprint)
+    assertNull(recorded.storedSize)
+  }
+
+  @Test
+  fun `refuses to mark removed a file that is not backed up`() = runTest {
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+
+    assertRefused { manager.markRemoved(recordId) }
+
+    manager.markCopying(recordId)
+
+    assertRefused { manager.markRemoved(recordId) }
+
+    manager.recordOutcome(BatchFileOutcome(id = recordId, state = State.FAILED, failureReason = FailureReason.NOT_ENOUGH_SPACE))
+
+    assertRefused { manager.markRemoved(recordId) }
+    assertEquals(State.FAILED, latestRecord().state)
+  }
+
+  @Test
+  fun `refuses to mark removed a file already removed`() = runTest {
+    val recordId = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"))).single().id
+    backUp(recordId)
+    manager.markRemoved(recordId)
+
+    assertRefused { manager.markRemoved(recordId) }
+  }
+
+  @Test
+  fun `lists the removed files`() = runTest {
+    val (kept, removed) = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"), record("b.txt"))).map { it.id }
+    backUp(kept)
+    backUp(removed)
+    manager.markRemoved(removed)
+
+    assertEquals(listOf(removed), manager.removedRecords().map { it.id })
+  }
+
+  @Test
+  fun `observes every backed up file, newest batch first and in picked order within one`() = runTest {
+    val (olderBackedUp, olderFailed) = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("a.txt"), record("b.txt"))).map { it.id }
+    backUp(olderBackedUp)
+    manager.markCopying(olderFailed)
+    manager.recordOutcome(BatchFileOutcome(id = olderFailed, state = State.FAILED, failureReason = FailureReason.NOT_ENOUGH_SPACE))
+    val newer = manager.createBatch(createdAtEpochMs = 2_000, records = listOf(record("d.txt"), record("c.txt"), record("e.txt"))).map { it.id }
+    newer.forEach { backUp(it) }
+    manager.markRemoved(newer.last())
+
+    assertEquals(listOf("d.txt", "c.txt", "a.txt"), manager.observeBackedUp().first().map { it.displayName })
+  }
+
+  @Test
   fun `settles abandoned files in every batch and leaves outcomes alone`() = runTest {
     val older = manager.createBatch(createdAtEpochMs = 1_000, records = listOf(record("old.txt"))).single()
     val latest = manager.createBatch(createdAtEpochMs = 2_000, records = listOf(record("done.txt"), record("busy.txt"), record("next.txt")))
@@ -213,6 +285,11 @@ class BatchDatabaseManagerTest {
   }
 
   private suspend fun latestRecord(): BatchFileRecord = manager.observeLatest().first().single()
+
+  private suspend fun backUp(recordId: Long) {
+    manager.markCopying(recordId)
+    manager.recordOutcome(backedUp(recordId))
+  }
 
   private suspend fun assertRefused(change: suspend () -> Unit) {
     val failure = runCatching { change() }.exceptionOrNull()

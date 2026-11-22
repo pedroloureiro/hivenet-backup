@@ -38,4 +38,7 @@ interface BackupDao {
       "WHERE batchId = (SELECT MAX(batchId) FROM batch_file_records) ORDER BY position",
   )
   fun observeLatestBatch(): Flow<List<BatchFileRecord>>
+
+  @Query("SELECT * FROM batch_file_records WHERE state = :state ORDER BY batchId DESC, position")
+  fun observeRecordsIn(state: State): Flow<List<BatchFileRecord>>
 }

@@ -49,6 +49,7 @@ fun FileState.toBatchFileOutcome(batchFileId: Long): BatchFileOutcome = when (th
   )
   FileState.Interrupted -> BatchFileOutcome(id = batchFileId, state = State.INTERRUPTED)
   FileState.NotStarted -> BatchFileOutcome(id = batchFileId, state = State.NOT_STARTED)
+  FileState.Removed -> BatchFileOutcome(id = batchFileId, state = State.REMOVED)
 }
 
 private fun BatchFileRecord.toFileState(): FileState = when (state) {
@@ -64,6 +65,7 @@ private fun BatchFileRecord.toFileState(): FileState = when (state) {
   State.FAILED -> FileState.Failed(toFailureReason())
   State.INTERRUPTED -> FileState.Interrupted
   State.NOT_STARTED -> FileState.NotStarted
+  State.REMOVED -> FileState.Removed
 }
 
 private fun BatchFileRecord.toFailureReason(): FailureReason = when (required(failureReason, "failureReason")) {

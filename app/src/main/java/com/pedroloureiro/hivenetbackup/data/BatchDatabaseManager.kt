@@ -35,10 +35,20 @@ class BatchDatabaseManager(private val database: BackupDatabase) {
 
   suspend fun recordOutcome(outcome: BatchFileOutcome) {
     check(outcome.state !in progressStates) { "${outcome.state} is not an Outcome" }
+    check(outcome.state != State.REMOVED) { "Only a Backed up file can become Removed" }
     database.withTransaction {
       val state = dao.stateOf(outcome.id)
       check(state == State.COPYING) { "Batch file ${outcome.id} is $state, so it can't take an Outcome" }
       dao.update(outcome)
+    }
+  }
+
+  // Clears the copy's fields: a Removed file keeps nothing.
+  suspend fun markRemoved(recordId: Long) {
+    database.withTransaction {
+      val state = dao.stateOf(recordId)
+      check(state == State.BACKED_UP) { "Batch file $recordId is $state, so it can't become Removed" }
+      dao.update(BatchFileOutcome(id = recordId, state = State.REMOVED))
     }
   }
 
@@ -49,7 +59,11 @@ class BatchDatabaseManager(private val database: BackupDatabase) {
     interrupted
   }
 
+  suspend fun removedRecords(): List<BatchFileRecord> = dao.recordsIn(State.REMOVED)
+
   fun observeLatest(): Flow<List<BatchFileRecord>> = dao.observeLatestBatch()
+
+  fun observeBackedUp(): Flow<List<BatchFileRecord>> = dao.observeRecordsIn(State.BACKED_UP)
 
   private companion object {
     val progressStates = setOf(State.WAITING, State.COPYING)
