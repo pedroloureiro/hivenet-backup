@@ -170,6 +170,7 @@ class BackupCopyRepositoryImplTest {
 
   private fun batchFile(id: Long, displayName: String, reportedSize: Long? = null) = BatchFile(
     id = id,
+    batchId = 1,
     sourceFile = SourceFile(uri = "content://picked/$id", displayName = displayName, mimeType = "application/octet-stream", reportedSize = reportedSize),
     state = FileState.Copying,
   )

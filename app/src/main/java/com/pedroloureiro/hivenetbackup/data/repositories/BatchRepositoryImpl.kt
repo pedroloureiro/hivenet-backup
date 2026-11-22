@@ -3,8 +3,10 @@ package com.pedroloureiro.hivenetbackup.data.repositories
 import com.pedroloureiro.hivenetbackup.data.BatchDatabaseManager
 import com.pedroloureiro.hivenetbackup.data.mappers.toBatch
 import com.pedroloureiro.hivenetbackup.data.mappers.toBatchFileOutcome
+import com.pedroloureiro.hivenetbackup.data.mappers.toBatchFile
 import com.pedroloureiro.hivenetbackup.data.mappers.toBatchFileRecord
 import com.pedroloureiro.hivenetbackup.domain.models.Batch
+import com.pedroloureiro.hivenetbackup.domain.models.BatchFile
 import com.pedroloureiro.hivenetbackup.domain.models.FileState
 import com.pedroloureiro.hivenetbackup.domain.models.SourceFile
 import com.pedroloureiro.hivenetbackup.domain.repositories.BatchRepository
@@ -26,9 +28,8 @@ class BatchRepositoryImpl(private val batchDatabaseManager: BatchDatabaseManager
     batchDatabaseManager.recordOutcome(fileState.toBatchFileOutcome(batchFileId))
   }
 
-  override suspend fun settleAbandoned() {
-    batchDatabaseManager.settleAbandoned()
-  }
+  override suspend fun settleAbandoned(): List<BatchFile> =
+    batchDatabaseManager.settleAbandoned().map { it.toBatchFile() }
 
   override fun observeLatest(): Flow<Batch?> =
     batchDatabaseManager.observeLatest().map { records -> records.ifEmpty { null }?.toBatch() }

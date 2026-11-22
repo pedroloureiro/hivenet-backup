@@ -32,9 +32,9 @@ class BatchFileRecordMapperTest {
     )
 
     fileStates.forEach { fileState ->
-      val record = sourceFile.toBatchFileRecord().copy(id = 7).applying(fileState.toBatchFileOutcome(batchFileId = 7))
+      val record = sourceFile.toBatchFileRecord().copy(id = 7, batchId = 2).applying(fileState.toBatchFileOutcome(batchFileId = 7))
 
-      assertEquals(BatchFile(id = 7, sourceFile = sourceFile, state = fileState), record.toBatchFile())
+      assertEquals(BatchFile(id = 7, batchId = 2, sourceFile = sourceFile, state = fileState), record.toBatchFile())
     }
   }
 

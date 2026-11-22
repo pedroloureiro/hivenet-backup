@@ -26,6 +26,7 @@ fun List<BatchFileRecord>.toBatch(): Batch {
 
 fun BatchFileRecord.toBatchFile() = BatchFile(
   id = id,
+  batchId = batchId,
   sourceFile = SourceFile(uri = sourceUri, displayName = displayName, mimeType = mimeType, reportedSize = reportedSize),
   state = toFileState(),
 )
