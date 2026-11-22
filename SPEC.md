@@ -8,12 +8,13 @@ What the app does and how it is built. Terms in **bold** are defined in [CONTEXT
 
 - **Select files** opens the system document picker (`ACTION_OPEN_DOCUMENT`, multiple selection, any type).
 - For each picked file the app reads its display name, its reported size (may be unknown) and its MIME type, and lists the selection with name and size. Reading is best effort: a missing name falls back to the URI's last path segment (or `unnamed`), a missing MIME type to `application/octet-stream`, and a missing or negative size to unknown.
+- Picking again adds to the selection, in picked order; a file already selected (same URI) is not added twice. A cancelled picker changes nothing.
 - The selection lives in memory only. Nothing is recorded until the user starts a **Batch**. **Clear** empties it.
-- While a **Batch** is running, **Select files** and **Back up** are disabled.
+- A **Batch** is running while any of its files is **Waiting** or **Copying**. The screen reads this from the latest **Batch** itself, so it holds after leaving and reopening the screen. While it runs, **Select files** and **Back up** are disabled.
 
 ### 2. Running a Batch
 
-Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
+Tapping **Back up N files** clears the selection and starts a **Batch** with it; a tap with an empty selection, such as a second tap before the screen updates, does nothing. `BackupViewModel` launches `RunBatch` in the app-wide scope (ADR-0002), which runs it as follows:
 
 1. One row per **Source file** is recorded in one transaction under a new **Batch** id, every file **Waiting**, in picked order.
 2. Files are processed one at a time, in order. For each file:
@@ -98,7 +99,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 | `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
 | `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
-| `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
+| `BackupViewModel` | JVM, fakes | Picks append in order without duplicates; starting clears the selection and backs up what was selected; a second tap starts nothing; state follows the latest **Batch**, running included |
 
 Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
 
