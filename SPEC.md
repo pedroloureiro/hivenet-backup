@@ -41,6 +41,8 @@ Tapping **Back up N files** clears the selection and starts a **Batch** with it;
 
 `filesDir/backups/<batchId>/<fileId>/<sanitised display name>` (ADR-0001). The per-file folder makes same-named **Source files** impossible to collide; the display name is kept so an opened or uploaded copy has a meaningful name. Temporary files end in `.part` and never sit under the final name.
 
+Nothing leaves the device: `allowBackup="false"` and `dataExtractionRules` exclude every domain from Auto Backup and device transfer. Restored out of step, the record could claim **Backup copies** that never arrived. Clearing the app's cache touches nothing it relies on (Room's lock file is recreated); clearing its storage removes the record and the **Backup store** together, so the app starts empty.
+
 Sanitising replaces `/` and NUL with `_` and turns an empty name, `.` or `..` into `_`. A name longer than 250 UTF-8 bytes (255, the file-system limit, less `.part`) is cut to fit at a character boundary, keeping an extension of up to 32 bytes.
 
 ### 5. Reopening the app
