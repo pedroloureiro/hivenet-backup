@@ -37,11 +37,12 @@
 ## Architecture
 
 - Layers as packages: `ui` → `domain` ← `data`, wired in `di` with Koin. See SPEC.md for the tree.
+- Generic extension functions on platform or language types (`String`, `File`) live in the root `extensions/` package so any layer can use them. They import nothing from `android.*`, `androidx.*` or the app's layers, so `domain` stays pure.
 - `domain` has no `android.*` or `androidx.*` imports.
 - Add a use case only when an operation has logic of its own. The ViewModel reads `BatchRepository` directly for plain reads.
 - Only `BatchDatabaseManager` touches the DAO (ADR-0003). Each of its operations enforces a rule or is a read the system needs; a method that only forwards one DAO call is not allowed.
 - Repository implementations map between data and domain; rules live in use cases or the manager.
-- Keep repository implementations to orchestration. Conversions (data ↔ domain, exception → **Failure reason**, display name → file name) are top-level extension functions in `data/mappers/`; generic helpers (`File`, `String`) are extension functions in `data/extensions/`. Both stay inside `data/` until another layer needs them.
+- Keep repository implementations to orchestration. Conversions (data ↔ domain, exception → **Failure reason**, display name → file name) are top-level extension functions in `data/mappers/`.
 - **Batches** run only in the app-wide scope provided by Koin (ADR-0002), never in `viewModelScope`.
 
 ### Folder structure

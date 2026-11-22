@@ -65,9 +65,9 @@ domain/
 data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
   mappers/        BackupCopyNameMapper, BackupStoreFailureMapper
-  extensions/     FileExtensions, StringExtensions
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
+extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
 ```
 
 | Repository | Wraps | Owns |
