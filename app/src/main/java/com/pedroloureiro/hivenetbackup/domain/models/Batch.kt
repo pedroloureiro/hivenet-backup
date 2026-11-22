@@ -6,4 +6,7 @@ data class Batch(
   val id: Long,
   val createdAt: Instant,
   val files: List<BatchFile>,
-)
+) {
+  val isRunning: Boolean
+    get() = files.any { it.state == FileState.Waiting || it.state == FileState.Copying }
+}

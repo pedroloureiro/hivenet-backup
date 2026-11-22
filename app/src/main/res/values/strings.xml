@@ -1,3 +1,24 @@
 <resources>
     <string name="app_name">Hivenet Backup</string>
+    <string name="select_files">Select files</string>
+    <string name="clear">Clear</string>
+    <plurals name="back_up_files">
+        <item quantity="one">Back up %d file</item>
+        <item quantity="other">Back up %d files</item>
+    </plurals>
+    <string name="unknown_size">Unknown size</string>
+    <string name="latest_batch">Latest Batch</string>
+    <string name="open">Open</string>
+    <string name="file_state_waiting">Waiting</string>
+    <string name="file_state_copying">Copying</string>
+    <string name="file_state_backed_up">Backed up</string>
+    <string name="file_state_failed">Failed</string>
+    <string name="file_state_interrupted">Interrupted</string>
+    <string name="file_state_not_started">Not started</string>
+    <string name="failed_because">Failed: %1$s</string>
+    <string name="failure_source_no_longer_available">Source no longer available</string>
+    <string name="failure_could_not_read_source">Couldn\'t read source</string>
+    <string name="failure_not_enough_space">Not enough space</string>
+    <string name="failure_copy_did_not_match_source">Copy didn\'t match source</string>
+    <string name="failure_unexpected_error">Unexpected error (%1$s)</string>
 </resources>
