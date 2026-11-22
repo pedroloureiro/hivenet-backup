@@ -108,20 +108,6 @@ Everything in SPEC.md's Behaviour sections 1 to 7: picking **Source files**, run
 
 ## AI assistance
 
-I used Claude Code (Claude Opus) throughout.
+I used Claude Code (Claude Opus) throughout. Planning took about half an hour with Claude and produced [CONTEXT.md](CONTEXT.md), [SPEC.md](SPEC.md) and the [ADRs](docs/adr/). I made every architecture, design and solution decision, or explicitly delegated it.
 
-Planning took about half an hour, working with Claude. Its result is [CONTEXT.md](CONTEXT.md), [SPEC.md](SPEC.md) and the [ADRs](docs/adr/). I made every architecture, design and solution decision, or explicitly delegated it to Claude.
-
-Claude broke the work into GitHub issues #1 to #10 with the repo's `/plan` command. Claude then implemented the code and tests, and made the commits and PRs with `/commit`. `CLAUDE.md` tells it to add no attribution lines, so the git history doesn't mark them as Claude's.
-
-I did the code review. My comments on PRs #12 to #15 changed the design. In #12 I asked why `Fingerprint` was a value class with no operations of its own, and Claude dropped the wrapper. In #13 the Room schema became one table. In #14 the generic `String` and `File` extensions moved to a root `extensions/` package. In #15 the mapping of the document provider's `Cursor` moved out of the repository into `data/mappers/`. Claude addressed each comment with the `/address-review` skill, which gives every comment a verdict, replies on every thread and may push back when it has a concrete reason. Lasting conventions from those reviews went into `CLAUDE.md`.
-
-Pivots during implementation were my choice. One was adding the **Backup copies** section with **Open** and **Delete** in the middle of issue #8, which brought in the **Removed** state.
-
-The instructions and tools Claude worked from are in the repo:
-
-- [`CLAUDE.md`](CLAUDE.md): project rules, including the glossary terms, the layers, the data-integrity rules and which classes are test-first.
-- [`.claude/commands/plan.md`](.claude/commands/plan.md) (`/plan`): scopes the work and creates GitHub issues with acceptance criteria, one architectural concern each, labelled by layer.
-- [`.claude/commands/commit.md`](.claude/commands/commit.md) (`/commit`): conventional commits referencing the issue, then push and open the PR. `CLAUDE.md` sets the order (`docs:` first, then `feat:`, then `refactor:` / `fix:` for review changes) and a PR body with `Closes #N`.
-- [`.claude/skills/address-review/SKILL.md`](.claude/skills/address-review/SKILL.md) (`/address-review`): handles my review comments as described above.
-- [`.claude/agents/submission-writer.md`](.claude/agents/submission-writer.md): the agent that drafted this README in my voice, from my own account of the time spent and of how I used AI.
+Claude split the work into GitHub issues, implemented the code and tests, and made the commits and PRs. I did the code review, and my comments changed the design. Pivots during implementation were mine. The project rules are in [`CLAUDE.md`](CLAUDE.md), and the commands, skill and agent Claude used are in the repo under [`.claude/`](.claude/), including the agent that drafted this README.
