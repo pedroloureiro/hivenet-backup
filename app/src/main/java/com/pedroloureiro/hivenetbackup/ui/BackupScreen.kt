@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +25,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -51,13 +55,25 @@ fun BackupScreen(viewModel: BackupViewModel, onOpen: (backupCopy: BackupCopy, mi
   val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
     viewModel.addToSelection(uris.map { it.toString() })
   }
+  var batchFileToRemove by remember { mutableStateOf<BatchFile?>(null) }
   BackupContent(
     uiState = uiState,
     onSelectFiles = { documentPicker.launch(arrayOf("*/*")) },
     onClear = viewModel::clearSelection,
     onBackUp = viewModel::backUp,
     onOpen = onOpen,
+    onDelete = { batchFileToRemove = it },
   )
+  batchFileToRemove?.let { batchFile ->
+    DeleteBackupCopyDialog(
+      displayName = batchFile.sourceFile.displayName,
+      onConfirm = {
+        viewModel.remove(batchFile)
+        batchFileToRemove = null
+      },
+      onDismiss = { batchFileToRemove = null },
+    )
+  }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +84,7 @@ private fun BackupContent(
   onClear: () -> Unit,
   onBackUp: () -> Unit,
   onOpen: (backupCopy: BackupCopy, mimeType: String) -> Unit,
+  onDelete: (batchFile: BatchFile) -> Unit,
 ) {
   Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { innerPadding ->
     LazyColumn(contentPadding = innerPadding) {
@@ -87,6 +104,11 @@ private fun BackupContent(
       uiState.latestBatch?.let { batch ->
         item { BatchSummary(batch) }
         items(batch.files, key = { it.id }) { batchFile -> BatchFileRow(batchFile, onOpen) }
+      }
+      if (uiState.backupCopies.isNotEmpty()) {
+        item { SectionTitle(stringResource(R.string.backup_copies)) }
+        // A file can also be a row of the latest Batch, so its key here must differ.
+        items(uiState.backupCopies, key = { "copy-${it.id}" }) { batchFile -> BackupCopyRow(batchFile, onOpen, onDelete) }
       }
     }
   }
@@ -110,6 +132,11 @@ private fun SelectionActions(
       Text(pluralStringResource(R.plurals.back_up_files, selectedCount, selectedCount))
     }
   }
+}
+
+@Composable
+private fun SectionTitle(title: String) {
+  Text(title, Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMedium)
 }
 
 @Composable
@@ -152,6 +179,38 @@ private fun BatchFileRow(batchFile: BatchFile, onOpen: (backupCopy: BackupCopy, 
 }
 
 @Composable
+private fun BackupCopyRow(
+  batchFile: BatchFile,
+  onOpen: (backupCopy: BackupCopy, mimeType: String) -> Unit,
+  onDelete: (batchFile: BatchFile) -> Unit,
+) {
+  // The section holds only Backed up files.
+  val fileState = batchFile.state as? FileState.BackedUp ?: return
+  ListItem(
+    supportingContent = { Text(sizeText(fileState.copy.storedSize)) },
+    trailingContent = {
+      Row {
+        TextButton(onClick = { onOpen(fileState.copy, batchFile.sourceFile.mimeType) }) { Text(stringResource(R.string.open)) }
+        TextButton(onClick = { onDelete(batchFile) }) { Text(stringResource(R.string.delete)) }
+      }
+    },
+  ) {
+    Text(batchFile.sourceFile.displayName)
+  }
+}
+
+@Composable
+private fun DeleteBackupCopyDialog(displayName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete)) } },
+    dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    title = { Text(stringResource(R.string.delete_backup_copy_title)) },
+    text = { Text(stringResource(R.string.delete_backup_copy_text, displayName)) },
+  )
+}
+
+@Composable
 private fun sizeText(reportedSize: Long?): String =
   reportedSize?.let { Formatter.formatShortFileSize(LocalContext.current, it) } ?: stringResource(R.string.unknown_size)
 
@@ -172,6 +231,7 @@ private fun FileState.labelRes(): Int = when (this) {
   is FileState.Failed -> R.string.file_state_failed
   FileState.Interrupted -> R.string.file_state_interrupted
   FileState.NotStarted -> R.string.file_state_not_started
+  FileState.Removed -> R.string.file_state_removed
 }
 
 @Preview(showBackground = true)
@@ -184,6 +244,7 @@ private fun SelectionPreview() {
       onClear = {},
       onBackUp = {},
       onOpen = { _, _ -> },
+      onDelete = {},
     )
   }
 }
@@ -207,6 +268,7 @@ private fun RunningBatchPreview() {
       onClear = {},
       onBackUp = {},
       onOpen = { _, _ -> },
+      onDelete = {},
     )
   }
 }

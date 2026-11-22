@@ -1,11 +1,13 @@
 package com.pedroloureiro.hivenetbackup.ui
 
 import com.pedroloureiro.hivenetbackup.domain.models.Batch
+import com.pedroloureiro.hivenetbackup.domain.models.BatchFile
 import com.pedroloureiro.hivenetbackup.domain.models.SourceFile
 
 data class BackupUiState(
   val selection: List<SourceFile> = emptyList(),
   val latestBatch: Batch? = null,
+  val backupCopies: List<BatchFile> = emptyList(),
 ) {
   val canSelectFiles: Boolean
     get() = latestBatch?.isRunning != true

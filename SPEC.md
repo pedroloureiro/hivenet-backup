@@ -14,7 +14,7 @@ What the app does and how it is built. Terms in **bold** are defined in [CONTEXT
 
 ### 2. Running a Batch
 
-Tapping **Back up N files** clears the selection and starts a **Batch** with it; a tap with an empty selection, such as a second tap before the screen updates, does nothing. `BackupViewModel` launches `RunBatch` in the app-wide scope (ADR-0002), which runs it as follows:
+Tapping **Back up N files** clears the selection and starts a **Batch** with it; a tap with an empty selection, such as a second tap before the screen updates, does nothing. `BackupViewModel` launches `RunBatch` in the app-wide scope (ADR-0002), once settling (section 5) has finished, and `RunBatch` runs it as follows:
 
 1. One row per **Source file** is recorded in one transaction under a new **Batch** id, every file **Waiting**, in picked order.
 2. Files are processed one at a time, in order. For each file:
@@ -41,33 +41,42 @@ Tapping **Back up N files** clears the selection and starts a **Batch** with it;
 
 `filesDir/backups/<batchId>/<fileId>/<sanitised display name>` (ADR-0001). The per-file folder makes same-named **Source files** impossible to collide; the display name is kept so an opened or uploaded copy has a meaningful name. Temporary files end in `.part` and never sit under the final name.
 
+Nothing leaves the device: `allowBackup="false"` and `dataExtractionRules` exclude every domain from Auto Backup and device transfer. Restored out of step, the record could claim **Backup copies** that never arrived. Clearing the app's cache touches nothing it relies on (Room's lock file is recreated); clearing its storage removes the record and the **Backup store** together, so the app starts empty.
+
 Sanitising replaces `/` and NUL with `_` and turns an empty name, `.` or `..` into `_`. A name longer than 250 UTF-8 bytes (255, the file-system limit, less `.part`) is cut to fit at a character boundary, keeping an extension of up to 32 bytes.
 
 ### 5. Reopening the app
 
-- On every process start, before any **Batch** can begin, abandoned files are settled: **Waiting** → **Not started**, **Copying** → **Interrupted**. Every `.part` file in the **Backup store** is deleted, and so is the folder `<batchId>/<fileId>/` of each file just marked **Interrupted**: the app may have stopped after the rename but before recording **Backed up**, and an **Interrupted** file keeps nothing.
+- On every process start, before any **Batch** can begin, abandoned files are settled. Settling starts in the app-wide scope as Koin starts, and a **Batch** started before it finishes waits for it. Settling turns **Waiting** → **Not started**, **Copying** → **Interrupted**. Every `.part` file in the **Backup store** is deleted, and so is the folder `<batchId>/<fileId>/` of each file just marked **Interrupted**: the app may have stopped after the rename but before recording **Backed up**, and an **Interrupted** file keeps nothing. The folder of every **Removed** file is deleted too: the app may have stopped after recording **Removed** but before deleting its copy (section 7).
 - The screen shows the most recent **Batch**: when it was made, a count per **Outcome**, and one row per **Source file** with name, size, **Outcome** (or progress while running), the **Failure reason** when **Failed**, and **Open** when **Backed up**.
 
 ### 6. Opening a Backup copy
 
-**Open** hands the **Backup copy** (never the **Source file**) to a viewer app through a `FileProvider` scoped to `backups/` only, read-only, with the recorded MIME type. If no app handles the type, the system chooser says so.
+**Open** hands the **Backup copy** (never the **Source file**) to a viewer app through a `FileProvider` (authority `<applicationId>.backups`) scoped to `backups/` only. `MainActivity` launches `ACTION_VIEW` with the recorded MIME type and only `FLAG_GRANT_READ_URI_PERMISSION`, through a chooser. If no app handles the type, the system chooser says so.
+
+### 7. Backup copies
+
+- Below the latest **Batch**, a **Backup copies** section lists every **Backed up** file across all **Batches**, newest **Batch** first and picked order within one. Each row shows the name, the stored size, **Open** (section 6) and **Delete**. The same **Source file** backed up in two **Batches** gives two rows.
+- **Delete** asks for confirmation, naming the file. Confirming launches `RemoveBackupCopy` in the app-wide scope (ADR-0002): it records the file **Removed** (only from **Backed up**), then deletes its folder `<batchId>/<fileId>/`. Recording first means a stop in between leaves a folder that the next start deletes (section 5), never a **Backed up** row without its copy. The **Source file** is never touched.
+- The file leaves the section and shows as **Removed** in its **Batch**.
 
 ## Architecture
 
 Layer-based MVVM with Clean Architecture, one Gradle module, Koin for DI.
 
 ```
+(root)            BackupApplication (starts Koin), MainActivity (hosts BackupScreen, opens Backup copies)
 ui/               BackupScreen, BackupViewModel, BackupUiState
 domain/
   models/         Batch, BatchFile, SourceFile, FileState, FailureReason, BackupCopy
   repositories/   BatchRepository, BackupCopyRepository, SourceFileRepository
-  usecases/       RunBatch, SettleAbandonedBatch
+  usecases/       RunBatch, SettleAbandonedBatch, RemoveBackupCopy
   BackupCopyFailedException
 data/
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
   mappers/        BackupCopyNameMapper, BackupStoreFailureMapper, BatchFileRecordMapper, SourceFileMapper
   BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
-di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
+di/               AppModule (app-wide scope, settling on start), DataModule, DomainModule, UiModule
 extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any layer)
 ```
 
@@ -75,17 +84,17 @@ extensions/       FileExtensions, StringExtensions (pure Kotlin, usable from any
 |---|---|---|
 | `BatchRepository` | Room, only through `BatchDatabaseManager` (ADR-0003) | The record of **Batches** and **Outcomes** |
 | `SourceFileRepository` | `ContentResolver` | Read-only access to **Source files**: name, size, MIME type, stream |
-| `BackupCopyRepository` | App-private files | Writing, confirming, opening and deleting **Backup copies** (steps 3–6 above) |
+| `BackupCopyRepository` | App-private files | Writing, confirming and deleting **Backup copies** (steps 3–6 above) |
 
 `BackupCopyRepository` reports the failures only the data layer can tell apart (`ENOSPC`, a mismatch, any other write-side error) as `BackupCopyFailedException` carrying its **Failure reason**. Exceptions from the **Source file**'s stream reach `RunBatch` unchanged, and `RunBatch` maps them using the table in section 3.
 
-`BatchDatabaseManager` works only with data-layer types; `BatchRepositoryImpl` maps them to and from the domain. Its operations: create a **Batch** with its files (one transaction, next **Batch** id, every file **Waiting**, in picked order; an empty **Batch** is refused), mark a file **Copying** (only from **Waiting**), record an **Outcome** (only on a **Copying** file, and only a final **File state**, so a recorded **Outcome** never changes), settle abandoned files (returning the files it marked **Interrupted**), observe the latest **Batch** (highest **Batch** id) with its files in picked order. A refused change throws `IllegalStateException`, an empty **Batch** `IllegalArgumentException`.
+`BatchDatabaseManager` works only with data-layer types; `BatchRepositoryImpl` maps them to and from the domain. Its operations: create a **Batch** with its files (one transaction, next **Batch** id, every file **Waiting**, in picked order; an empty **Batch** is refused), mark a file **Copying** (only from **Waiting**), record an **Outcome** (only on a **Copying** file, and only a final **File state** other than **Removed**, so a recorded **Outcome** never changes through it), mark a file **Removed** (only from **Backed up**, clearing its copy's fields), settle abandoned files (returning the files it marked **Interrupted**), list the **Removed** files, observe the latest **Batch** (highest **Batch** id) with its files in picked order, observe every **Backed up** file (newest **Batch** first, picked order within one). A refused change throws `IllegalStateException`, an empty **Batch** `IllegalArgumentException`.
 
 ## Data model
 
 Room holds the record of what happened to each **Source file**; the **Backup store** holds only the bytes, and a **Backed up** row points to its copy with `relativePath`. Rows of older **Batches** are kept: they hold the **Fingerprints** of copies still in the **Backup store**. One table, one row per **Batch file**:
 
-- `batch_file_records`: `id`, `batchId` (the manager assigns the highest existing one + 1), `batchCreatedAtEpochMs`, `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?` (lowercase hex SHA-256), `relativePath?`.
+- `batch_file_records`: `id`, `batchId` (the manager assigns the highest existing one + 1), `batchCreatedAtEpochMs`, `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`, `REMOVED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?` (lowercase hex SHA-256), `relativePath?`.
 - Schema version 1, exported to `app/schemas/`.
 
 ## Testing
@@ -96,12 +105,13 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 |---|---|---|
 | `RunBatch` | JVM, fakes | Records the **Batch**; order; isolation; each **Failure reason** from its real cause, Downloads' `SecurityException` included; space check fails only the file that doesn't fit, unknown sizes skip it; exactly one **Outcome** per file; cancellation and a failed record stop the **Batch** |
 | `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy, empty files included; correct **Fingerprint**; reported size checked only when known; no file left after a read error, a byte-count mismatch or a write-side error, which surfaces as **Unexpected error** rather than a source exception; same names don't collide; sanitised and length-capped names; free space before the first copy; delete scope (`.part` files only, one file's folder only). Not covered: re-read mismatch and `ENOSPC`, which real files can't produce on the JVM |
-| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
+| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state other than **Removed**, so it never changes; **Removed** only from **Backed up**, clearing the copy; settle rules and the files it marks **Interrupted**; the **Removed** files; latest **Batch** with files in picked order; every **Backed up** file, newest **Batch** first |
 | `BatchFileRecordMapper` | JVM | Every **File state** and **Failure reason** survives the round trip domain → record → domain; a **Source file** survives it too; a record missing a field its state requires is refused |
-| `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
-| `BackupViewModel` | JVM, fakes | Picks append in order without duplicates; starting clears the selection and backs up what was selected; a second tap starts nothing; state follows the latest **Batch**, running included |
+| `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** or finds **Removed** |
+| `RemoveBackupCopy` | JVM, fakes | Records **Removed**, then deletes the file's folder; a refused record deletes nothing |
+| `BackupViewModel` | JVM, fakes | Picks append in order without duplicates; starting clears the selection and backs up what was selected; a second tap starts nothing; state follows the latest **Batch**, running included; a **Batch** started before settling finishes waits for it; deleting a **Backup copy** takes it out of the section and shows it **Removed** |
 
-Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`).
+Not unit-tested: composables, `SourceFileRepositoryImpl` and `SourceFileMapper` (the metadata fallbacks are plain defaults; the demo proves them), `BatchRepositoryImpl` (orchestration only; its conversions are `BatchFileRecordMapper`), the Koin modules and `MainActivity` (running the app resolves every binding and exercises **Open**).
 
 ## Demo and seed scripts
 
@@ -127,7 +137,7 @@ minSdk 26, target SDK 37, compile SDK 37.1. Kotlin 2.4.21, AGP 9.3.3, Gradle 9.7
 - Retry for **Failed**, **Interrupted** and **Not started** files.
 - Skip files whose **Fingerprint** is already in the **Backup store**.
 - Detect a source changing mid-copy (size and last-modified before and after).
-- Delete a **Batch** and its **Backup copies**.
+- Delete a whole **Batch** and its **Backup copies**.
 - A history of older **Batches**.
 - Compression, only for types that are not already compressed.
 - A user-visible destination folder through SAF.

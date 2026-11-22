@@ -6,8 +6,10 @@ import com.pedroloureiro.hivenetbackup.domain.repositories.FakeBackupCopyReposit
 import com.pedroloureiro.hivenetbackup.domain.repositories.FakeBackupCopyRepository.Companion.backupCopyOf
 import com.pedroloureiro.hivenetbackup.domain.repositories.FakeBatchRepository
 import com.pedroloureiro.hivenetbackup.domain.repositories.FakeSourceFileRepository
+import com.pedroloureiro.hivenetbackup.domain.usecases.RemoveBackupCopy
 import com.pedroloureiro.hivenetbackup.domain.usecases.RunBatch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -26,7 +28,9 @@ import org.junit.Test
 class BackupViewModelTest {
   private val batchRepository = FakeBatchRepository()
   private val sourceFileRepository = FakeSourceFileRepository()
-  private val runBatch = RunBatch(batchRepository, sourceFileRepository, FakeBackupCopyRepository())
+  private val backupCopyRepository = FakeBackupCopyRepository()
+  private val runBatch = RunBatch(batchRepository, sourceFileRepository, backupCopyRepository)
+  private val removeBackupCopy = RemoveBackupCopy(batchRepository, backupCopyRepository)
 
   @Before
   fun setMainDispatcher() {
@@ -81,6 +85,38 @@ class BackupViewModelTest {
   }
 
   @Test
+  fun `a Batch started before settling finishes waits for it`() = runTest {
+    val abandonedSettled = Job()
+    val viewModel = observedViewModel(abandonedSettled)
+    viewModel.addToSelection(listOf(sourceFileRepository.add("a.txt", "a").uri))
+
+    viewModel.backUp()
+    advanceUntilIdle()
+    assertNull(viewModel.uiState.value.latestBatch)
+
+    abandonedSettled.complete()
+    advanceUntilIdle()
+    assertEquals(1L, viewModel.uiState.value.latestBatch?.id)
+  }
+
+  @Test
+  fun `deleting a Backup copy takes it out of the section and shows it Removed`() = runTest {
+    val viewModel = observedViewModel()
+    viewModel.addToSelection(listOf("a.txt", "b.txt").map { sourceFileRepository.add(it, it).uri })
+    viewModel.backUp()
+    advanceUntilIdle()
+    val backedUp = viewModel.uiState.value.backupCopies
+    assertEquals(listOf("a.txt", "b.txt"), backedUp.map { it.sourceFile.displayName })
+
+    viewModel.remove(backedUp.first())
+    advanceUntilIdle()
+
+    assertEquals(listOf("b.txt"), viewModel.uiState.value.backupCopies.map { it.sourceFile.displayName })
+    assertEquals(FileState.Removed, viewModel.uiState.value.latestBatch?.files?.first()?.state)
+    assertEquals(listOf(1L to backedUp.first().id), backupCopyRepository.deletedFolders)
+  }
+
+  @Test
   fun `state follows the latest Batch, running while a file is Waiting or Copying`() = runTest {
     val viewModel = observedViewModel()
     assertNull(viewModel.uiState.value.latestBatch)
@@ -105,8 +141,8 @@ class BackupViewModelTest {
   }
 
   // The test scope stands in for the app-wide scope, so runTest fails if the launched Batch throws.
-  private fun TestScope.observedViewModel(): BackupViewModel {
-    val viewModel = BackupViewModel(batchRepository, sourceFileRepository, runBatch, appScope = this)
+  private fun TestScope.observedViewModel(abandonedSettled: Job = Job().apply { complete() }): BackupViewModel {
+    val viewModel = BackupViewModel(batchRepository, sourceFileRepository, runBatch, removeBackupCopy, appScope = this, abandonedSettled)
     backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
     return viewModel
   }

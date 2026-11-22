@@ -21,7 +21,7 @@ data class BatchFileRecord(
   val fingerprint: String? = null,
   val relativePath: String? = null,
 ) {
-  enum class State { WAITING, COPYING, BACKED_UP, FAILED, INTERRUPTED, NOT_STARTED }
+  enum class State { WAITING, COPYING, BACKED_UP, FAILED, INTERRUPTED, NOT_STARTED, REMOVED }
 
   enum class FailureReason {
     SOURCE_NO_LONGER_AVAILABLE,

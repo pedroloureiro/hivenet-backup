@@ -36,7 +36,7 @@ class FakeBatchRepository : BatchRepository {
   override suspend fun recordOutcome(batchFileId: Long, fileState: FileState) {
     recordOutcomeFailure?.let { throw it }
     check(stateOf(batchFileId) == FileState.Copying)
-    check(fileState != FileState.Waiting && fileState != FileState.Copying)
+    check(fileState != FileState.Waiting && fileState != FileState.Copying && fileState != FileState.Removed)
     record(batchFileId, fileState)
   }
 
@@ -52,7 +52,18 @@ class FakeBatchRepository : BatchRepository {
     return interrupted
   }
 
+  override suspend fun markRemoved(batchFileId: Long) {
+    check(stateOf(batchFileId) is FileState.BackedUp)
+    record(batchFileId, FileState.Removed)
+  }
+
+  override suspend fun removedFiles(): List<BatchFile> = allFiles().filter { it.state == FileState.Removed }
+
   override fun observeLatest(): Flow<Batch?> = batches.map { it.lastOrNull() }
+
+  override fun observeBackedUp(): Flow<List<BatchFile>> = batches.map { all ->
+    all.reversed().flatMap { batch -> batch.files.filter { it.state is FileState.BackedUp } }
+  }
 
   fun stateOf(batchFileId: Long): FileState = allFiles().single { it.id == batchFileId }.state
 

@@ -7,7 +7,8 @@ class SettleAbandonedBatch(private val batchRepository: BatchRepository, private
   suspend operator fun invoke() {
     val interruptedFiles = batchRepository.settleAbandoned()
     backupCopyRepository.deletePartFiles()
-    // The app may have stopped after the rename but before recording Backed up, and an Interrupted file keeps nothing.
-    interruptedFiles.forEach { backupCopyRepository.deleteFolderOf(it.batchId, it.id) }
+    // The app may have stopped after the rename but before recording Backed up, or after recording Removed but before
+    // deleting the copy. Neither state keeps anything.
+    (interruptedFiles + batchRepository.removedFiles()).forEach { backupCopyRepository.deleteFolderOf(it.batchId, it.id) }
   }
 }

@@ -47,6 +47,10 @@ _Avoid_: failed, cancelled, aborted
 The app stopped before this file's turn came. Nothing was read.
 _Avoid_: skipped, pending, cancelled
 
+**Removed**:
+The file was **Backed up** and the user later deleted its **Backup copy**. Nothing is kept, not even the **Fingerprint**. It is the only change an **Outcome** can take, and only from **Backed up**.
+_Avoid_: deleted, discarded, purged
+
 **Failure reason**:
 The cause recorded with a **Failed** **Outcome**, phrased so the user can tell what is wrong with the file or the device. One of:
 - **Source no longer available**: the file was deleted, moved, or access to it was withdrawn after it was picked.
@@ -65,7 +69,7 @@ One **Source file** as recorded in a **Batch**, with its place in the order and 
 _Avoid_: entry, item, row
 
 **File state**:
-Where a **Batch file** stands: **Waiting** or **Copying** while the **Batch** runs, then its **Outcome**.
+Where a **Batch file** stands: **Waiting** or **Copying** while the **Batch** runs, then its **Outcome**, and **Removed** if its **Backup copy** is deleted afterwards.
 _Avoid_: status
 
 ## Flagged ambiguities

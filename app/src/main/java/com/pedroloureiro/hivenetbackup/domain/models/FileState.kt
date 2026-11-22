@@ -12,4 +12,6 @@ sealed interface FileState {
   data object Interrupted : FileState
 
   data object NotStarted : FileState
+
+  data object Removed : FileState
 }

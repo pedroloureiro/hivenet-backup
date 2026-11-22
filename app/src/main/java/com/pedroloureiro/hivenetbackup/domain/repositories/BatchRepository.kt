@@ -13,7 +13,14 @@ interface BatchRepository {
 
   suspend fun recordOutcome(batchFileId: Long, fileState: FileState)
 
+  suspend fun markRemoved(batchFileId: Long)
+
   suspend fun settleAbandoned(): List<BatchFile>
 
+  suspend fun removedFiles(): List<BatchFile>
+
   fun observeLatest(): Flow<Batch?>
+
+  // Newest Batch first, picked order within one.
+  fun observeBackedUp(): Flow<List<BatchFile>>
 }
