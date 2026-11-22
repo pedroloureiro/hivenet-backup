@@ -7,6 +7,7 @@ import com.pedroloureiro.hivenetbackup.domain.repositories.BatchRepository
 import com.pedroloureiro.hivenetbackup.domain.repositories.SourceFileRepository
 import com.pedroloureiro.hivenetbackup.domain.usecases.RunBatch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,7 @@ class BackupViewModel(
   private val runBatch: RunBatch,
   // App-wide, so a Batch outlives the screen (ADR-0002).
   private val appScope: CoroutineScope,
+  private val abandonedSettled: Job,
 ) : ViewModel() {
   private val selection = MutableStateFlow<List<SourceFile>>(emptyList())
 
@@ -42,7 +44,11 @@ class BackupViewModel(
   fun backUp() {
     val sourceFiles = selection.getAndUpdate { emptyList() }
     if (sourceFiles.isEmpty()) return
-    appScope.launch { runBatch(sourceFiles) }
+    appScope.launch {
+      // Settling after create would mark this Batch's Waiting files Not started.
+      abandonedSettled.join()
+      runBatch(sourceFiles)
+    }
   }
 
   private companion object {
