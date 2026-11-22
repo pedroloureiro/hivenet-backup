@@ -61,7 +61,7 @@ domain/
   usecases/       RunBatch, SettleAbandonedBatch
   BackupCopyFailedException
 data/
-  entities/       BatchEntity, BatchFileEntity
+  entities/       BatchEntity, BatchFileEntity, BatchWithFiles, BatchFileOutcome
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
   BatchDatabaseManager, BackupDao, BackupDatabase
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
@@ -75,12 +75,12 @@ di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 
 `BackupCopyRepository` reports the failures only the data layer can tell apart (`ENOSPC`, a mismatch, any other write-side error) as `BackupCopyFailedException` carrying its **Failure reason**. Exceptions from the **Source file**'s stream reach `RunBatch` unchanged, and `RunBatch` maps them using the table in section 3.
 
-`BatchDatabaseManager` operations: create a **Batch** with its files (one transaction), mark a file **Copying**, record a final **Outcome** (rejected if the file already has one), settle abandoned files, observe the latest **Batch**.
+`BatchDatabaseManager` works only with data-layer types; `BatchRepositoryImpl` maps them to and from the domain. Its operations: create a **Batch** with its files (one transaction, every file **Waiting**, in picked order), mark a file **Copying** (only from **Waiting**), record an **Outcome** (only on a **Copying** file, and only a final **File state**, so a recorded **Outcome** never changes), settle abandoned files, observe the latest **Batch** (highest id) with its files in picked order. A refused change throws `IllegalStateException`.
 
 ## Data model
 
-- `batches`: `id`, `createdAt`.
-- `batch_files`: `id`, `batchId` (FK, cascade), `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?`, `failureDetail?`, `storedSize?`, `fingerprint?`, `relativePath?`.
+- `batches`: `id`, `createdAt` (epoch milliseconds).
+- `batch_files`: `id`, `batchId` (FK, cascade), `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?`, `relativePath?`.
 - Schema version 1, exported to `app/schemas/`.
 
 ## Testing
@@ -91,7 +91,7 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 |---|---|---|
 | `RunBatch` | JVM, fakes | Order; isolation; each **Failure reason** from its real cause; space check fails only the file that doesn't fit; exactly one **Outcome** per file |
 | `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy; correct **Fingerprint**; no file left after a read error or mismatch; same names don't collide; delete scope |
-| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create; final **Outcomes** never change; settle rules; latest **Batch** |
+| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, every file **Waiting** in picked order; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules; latest **Batch** with files in picked order |
 | `SettleAbandonedBatch` | JVM, fakes | Settles the record and removes `.part` files |
 | `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
 

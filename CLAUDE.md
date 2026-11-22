@@ -20,6 +20,10 @@
 - KISS. No abstractions beyond the task. No speculative features.
 - Code reads like prose: names are precise, structure is self-evident.
 - Comments only for non-obvious invariants or workarounds. Never describe what the code does.
+- One-line comments use `//`, never `/** */`. No doc comments on interface methods: the implementation makes the behaviour clear.
+- No single-value wrapper types (e.g. a value class around a `String`) unless they carry operations or rules of their own.
+- Prefer one flat sealed type over a layered hierarchy (e.g. `FileState` holds all six states; there is no separate `Outcome` type).
+- Parameter names match their type (`fileState: FileState`).
 - Surgical changes only. Every changed line traces to the current task.
 
 ## Architecture
