@@ -10,7 +10,7 @@ interface BatchRepository {
 
   suspend fun markCopying(batchFileId: Long)
 
-  suspend fun recordOutcome(batchFileId: Long, outcome: FileState)
+  suspend fun recordOutcome(batchFileId: Long, fileState: FileState)
 
   suspend fun settleAbandoned()
 
