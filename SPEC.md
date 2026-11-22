@@ -15,7 +15,7 @@ What the app does and how it is built. Terms in **bold** are defined in [CONTEXT
 
 Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
 
-1. The **Batch** and one row per **Source file** are recorded in one transaction, every file **Waiting**, in picked order.
+1. One row per **Source file** is recorded in one transaction under a new **Batch** id, every file **Waiting**, in picked order.
 2. Files are processed one at a time, in order. For each file:
    1. Mark it **Copying**.
    2. If the reported size is known and larger than the free space in the **Backup store** minus a 50 MB margin, it is **Failed: Not enough space** without writing anything.
@@ -42,7 +42,7 @@ Tapping **Back up N files** starts a **Batch** in the app-wide scope (ADR-0002):
 
 ### 5. Reopening the app
 
-- On every process start, before any **Batch** can begin, abandoned files are settled: **Waiting** → **Not started**, **Copying** → **Interrupted**, and every `.part` file in the **Backup store** is deleted.
+- On every process start, before any **Batch** can begin, abandoned files are settled: **Waiting** → **Not started**, **Copying** → **Interrupted**. Every `.part` file in the **Backup store** is deleted, and so is the folder `<batchId>/<fileId>/` of each file just marked **Interrupted**: the app may have stopped after the rename but before recording **Backed up**, and an **Interrupted** file keeps nothing.
 - The screen shows the most recent **Batch**: when it was made, a count per **Outcome**, and one row per **Source file** with name, size, **Outcome** (or progress while running), the **Failure reason** when **Failed**, and **Open** when **Backed up**.
 
 ### 6. Opening a Backup copy
@@ -61,9 +61,8 @@ domain/
   usecases/       RunBatch, SettleAbandonedBatch
   BackupCopyFailedException
 data/
-  entities/       BatchEntity, BatchFileEntity
   repositories/   BatchRepositoryImpl, BackupCopyRepositoryImpl, SourceFileRepositoryImpl
-  BatchDatabaseManager, BackupDao, BackupDatabase
+  BatchDatabaseManager, BackupDao, BackupDatabase, BatchFileRecord, BatchFileOutcome
 di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 ```
 
@@ -75,12 +74,13 @@ di/               AppModule (app-wide scope), DataModule, DomainModule, UiModule
 
 `BackupCopyRepository` reports the failures only the data layer can tell apart (`ENOSPC`, a mismatch, any other write-side error) as `BackupCopyFailedException` carrying its **Failure reason**. Exceptions from the **Source file**'s stream reach `RunBatch` unchanged, and `RunBatch` maps them using the table in section 3.
 
-`BatchDatabaseManager` operations: create a **Batch** with its files (one transaction), mark a file **Copying**, record a final **Outcome** (rejected if the file already has one), settle abandoned files, observe the latest **Batch**.
+`BatchDatabaseManager` works only with data-layer types; `BatchRepositoryImpl` maps them to and from the domain. Its operations: create a **Batch** with its files (one transaction, next **Batch** id, every file **Waiting**, in picked order; an empty **Batch** is refused), mark a file **Copying** (only from **Waiting**), record an **Outcome** (only on a **Copying** file, and only a final **File state**, so a recorded **Outcome** never changes), settle abandoned files (returning the files it marked **Interrupted**), observe the latest **Batch** (highest **Batch** id) with its files in picked order. A refused change throws `IllegalStateException`, an empty **Batch** `IllegalArgumentException`.
 
 ## Data model
 
-- `batches`: `id`, `createdAt`.
-- `batch_files`: `id`, `batchId` (FK, cascade), `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?`, `failureDetail?`, `storedSize?`, `fingerprint?`, `relativePath?`.
+Room holds the record of what happened to each **Source file**; the **Backup store** holds only the bytes, and a **Backed up** row points to its copy with `relativePath`. Rows of older **Batches** are kept: they hold the **Fingerprints** of copies still in the **Backup store**. One table, one row per **Batch file**:
+
+- `batch_file_records`: `id`, `batchId` (the manager assigns the highest existing one + 1), `batchCreatedAtEpochMs`, `position`, `sourceUri`, `displayName`, `mimeType`, `reportedSize?`, `state` (`WAITING`, `COPYING`, `BACKED_UP`, `FAILED`, `INTERRUPTED`, `NOT_STARTED`), `failureReason?` (`SOURCE_NO_LONGER_AVAILABLE`, `COULD_NOT_READ_SOURCE`, `NOT_ENOUGH_SPACE`, `COPY_DID_NOT_MATCH_SOURCE`, `UNEXPECTED_ERROR`), `failureDetail?`, `storedSize?`, `fingerprint?`, `relativePath?`.
 - Schema version 1, exported to `app/schemas/`.
 
 ## Testing
@@ -91,8 +91,8 @@ Living plan: revisit it whenever a class is added or gains logic (see CLAUDE.md)
 |---|---|---|
 | `RunBatch` | JVM, fakes | Order; isolation; each **Failure reason** from its real cause; space check fails only the file that doesn't fit; exactly one **Outcome** per file |
 | `BackupCopyRepositoryImpl` | JVM, real temp files | Byte-identical copy; correct **Fingerprint**; no file left after a read error or mismatch; same names don't collide; delete scope |
-| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create; final **Outcomes** never change; settle rules; latest **Batch** |
-| `SettleAbandonedBatch` | JVM, fakes | Settles the record and removes `.part` files |
+| `BatchDatabaseManager` | Robolectric, in-memory Room | Transactional create, next **Batch** id, every file **Waiting** in picked order, empty **Batch** refused; **Copying** only from **Waiting**; an **Outcome** only on a **Copying** file and only a final state, so it never changes; settle rules and the files it marks **Interrupted**; latest **Batch** with files in picked order |
+| `SettleAbandonedBatch` | JVM, fakes | Settles the record, removes `.part` files and the folder of each file it marks **Interrupted** |
 | `BackupViewModel` | JVM, fakes | Starting clears the selection; state follows the latest **Batch** |
 
 Not unit-tested: composables, `SourceFileRepositoryImpl` (proven by the demo), `BatchRepositoryImpl` (mapping only, covered through the above).
