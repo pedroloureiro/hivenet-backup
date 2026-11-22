@@ -7,11 +7,13 @@ plugins {
 
 android {
     namespace = "com.pedroloureiro.hivenetbackup"
-    compileSdk = 36
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
     defaultConfig {
         applicationId = "com.pedroloureiro.hivenetbackup"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
     }
@@ -52,6 +54,11 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+// Robolectric needs Java 21 to emulate SDK 37; the app's bytecode stays at Java 17.
+tasks.withType<Test>().configureEach {
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -75,6 +82,10 @@ dependencies {
   // Local tests: JUnit, coroutines
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+
+  // Coroutines: one version for the app and its tests
+  implementation(platform(libs.kotlinx.coroutines.bom))
+  implementation(libs.kotlinx.coroutines.android)
 
   // Persistence
   implementation(libs.androidx.room.runtime)
